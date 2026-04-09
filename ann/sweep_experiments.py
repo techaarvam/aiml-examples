@@ -1,3 +1,6 @@
+# This file and the argParser.py are the files that used AI code generation.
+# All other code is hand-written with a learning objective in mind.
+
 import csv
 import os
 import subprocess
