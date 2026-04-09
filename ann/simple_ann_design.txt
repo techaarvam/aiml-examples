@@ -1,0 +1,49 @@
+# Design thoughts:
+
+project sub-divisions:
+1. input generation
+     need labeled inputs. labels go from 0-9 (for numerals) and 0-25 (for alphabets). Python doesnt have enums, consts or dicts to have the mapping back to unicode chars. 8*8 grid. sklearn dataset can be used. 
+
+2. Utility functions
+     Weighted addition + bias  
+     softmax
+     sigmoid
+     ReLu
+
+3. Each sub-layer classes:
+     Weighted addition + bias (hold current weights and bias values)
+     activation layer - sigmoid
+     activation layer - ReLu
+     output layer - softMax
+     
+      each sub-layer can get backprop'd-error, 
+       in a function call like backprop( error, update_weights = True)
+      (5) goes deeper into the update math
+      each sub-layer to support a forward( inputs ) : This performs the operation, keeps the output state preserved for the later back-prop requirement. 
+
+4. layer classes:
+    weighted addition + bias + sigmoid
+    weighted addition + bias + ReLu
+    weighted addition + bias + softMax
+     
+
+4. topology
+    serially connected N layers.
+    Each layer instantiated with num_nodes, layer-type 
+
+5.  backprop calc:
+      1. softMax: no updates, output error = input error
+      2. Weighted addition + bias:
+             Weight update direction = input error * a.T 
+             bias update direction = input error
+             output error is W.T @ input error
+      3. sigmoid: 
+             output error = input error (.) a (.) a-1
+             a was the previous sigmoid output , so state should be present.
+             (.) is the hadamord product
+      4. ReLu:
+             output error = input error (.) 1[z>0] !
+             i.e only if the ReLu output was non-zero, output error is non-zero.
+
+
+The structure of this implementation is CPU friendly , not so much parallelizable implemented. For a learning implementation proceed with this simplification. 
