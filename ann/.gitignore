@@ -1,0 +1,4 @@
+*.swp
+.codex
+__pycache__/
+layers/__pycache__/
