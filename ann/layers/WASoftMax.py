@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 from debug import *
 
 # shape has dataset size(n), input size(d), numnodes(d)
@@ -42,4 +48,3 @@ class WASoftMax:
     def backprop(self, inputError=None): 
         # inputError will be None if WASoftMax is the final layer
         self.softMax.backprop(inputError) 
-

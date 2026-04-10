@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 from sklearn import datasets
 import numpy as np
 
@@ -19,8 +25,11 @@ class DigitsInput:
  
 
         trainingInputs = np.array  (digits.data[0:1000]).T 
-        mean = np.mean(trainingInputs, axis=1, keepdims=True)
-        std = np.std(trainingInputs, axis=1, keepdims=True)
+       
+        # Using axis=0, i.e persample mean of the 64 features,
+        # we will get 1000 means due to the 0:1000
+        mean = np.mean(trainingInputs, axis=0, keepdims=True)
+        std = np.std(trainingInputs, axis=0, keepdims=True)
         std = np.where(std < 1e-8, 1.0, std)
         if (args.normalize):
             self.trainingInputs = (trainingInputs - mean) / std
@@ -30,9 +39,11 @@ class DigitsInput:
         self.trainingTargets = np.array (digits.target[0:1000])
     
         validationInputs = np.array ( digits.data[1000:]).T 
-        std = np.where(std < 1e-8, 1.0, std)
+        validationMean = np.mean(validationInputs, axis=0, keepdims=True)
+        validationStd = np.std(validationInputs, axis=0, keepdims=True)
+        validationStd = np.where(validationStd < 1e-8, 1.0, validationStd)
         if (args.normalize):
-            self.validationInputs = (validationInputs - mean ) / std
+            self.validationInputs = (validationInputs - validationMean) / validationStd
         else: 
             self.validationInputs = validationInputs 
         self.validationTargets = np.array( digits.target[1000:])

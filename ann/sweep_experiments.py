@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 # This file and the argParser.py are the files that used AI code generation.
 # All other code is hand-written with a learning objective in mind.
 

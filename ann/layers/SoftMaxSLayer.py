@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 import AnnUtils
 import numpy as np
 from debug import *
@@ -98,8 +104,7 @@ class SoftMaxSLayer:
             raise Exception("Error: backprop without valid error input")
             return
 
-        if (inputError == None):
+        if (inputError is None):
             inputError = self.inputError
 
         return self.prevLayer.backprop(inputError)
-

@@ -1,5 +1,13 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 from debug import *
 from argParser import *
+import re
+from heuristics import *
 
 # shape has dataset size(n), input size(d), numnodes(m) 
 
@@ -29,9 +37,18 @@ class WeightedAddSLayer:
     def __init__(self, name, shape, lr):
         (n,d,m) = shape
         self.name = name
-        rng = np.random.default_rng(seed=args.seed)
-        self.weights = (rng.random(size=(d, m))-0.5) * args.weight_scale
+
+        matchObj = re.match(".*([0-9]+).*", name)
+
+        if (matchObj is None): 
+            self.layerNum = "0"
+        else: 
+            self.layerNum = matchObj[1]
+
+        rng = np.random.default_rng(seed=AnnUtils.getSeed(name))
+        self.weights = (rng.random(size=(d, m))-args.weight_skew) * args.weight_scale
         #self.weights = np.zeros((d,m)) 
+
         self.bias = np.zeros((m,1))
         self.output = np.zeros((m,n))
         self.learningRate = lr
@@ -42,6 +59,11 @@ class WeightedAddSLayer:
 
         self.inputs = inputs.copy() 
         self.outputs = AnnUtils.weightedAdd(self.weights, inputs ,self.bias)
+
+        fracLargeZ = np.mean(self.outputs>3) 
+         
+        heuristics.epochData["fracLargeZ_"+self.layerNum] = fracLargeZ
+        
 
         if (self.nextLayer == None): 
             raise Exception("Error: WeightedAdd Layer: forward pass attempt \
@@ -62,7 +84,21 @@ class WeightedAddSLayer:
         outputError = self.weights @ inputError
         
         # Weight update must happen after the outputError(grad) computation
-        self.weights -= weightDirection.T * lr
+        weightDirectionT = weightDirection.T
+        self.weights -= weightDirectionT * lr
+
+        weightNorm = np.linalg.norm(self.weights, axis=1)
+        weightDirectionNorm = np.linalg.norm(weightDirectionT, axis=1)
+        safeWeightNorm = np.where(weightNorm < 1e-12, 1.0, weightNorm)
+        updateRatio = weightDirectionNorm / safeWeightNorm
+        maxUR = np.max(updateRatio)
+        minUR = np.min(updateRatio)
+        meanUR = np.mean(updateRatio)
+
+        heuristics.epochData["MeanWAgradientNorm_"+self.layerNum] = np.mean(weightDirectionNorm)
+        heuristics.epochData["MaxWAupdateRatio_"+self.layerNum] = maxUR
+        heuristics.epochData["MinWAupdateRatio_"+self.layerNum] = minUR
+        heuristics.epochData["MeanWAupdateRatio_"+self.layerNum] = meanUR
 
         # Bias may benefit from its own learning rate
         info (self.name, " biasDirection ")
@@ -88,5 +124,3 @@ class WeightedAddSLayer:
             return self.prevLayer.backprop(outputError)
         else:
             return outputError
-
-

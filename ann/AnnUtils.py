@@ -1,7 +1,18 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 import numpy as np
 import math
 from debug import *
+from argParser import *
 
+def getSeed(text):
+    chars = np.frombuffer(text.encode(), dtype=np.uint8)
+
+    return np.sum(chars) + args.seed
 
 def weightedAdd( W, x, b):
     info ("Shapes: W.T @ x + b")
@@ -31,5 +42,3 @@ def ReLu ( z ):
 
 def sigmoid ( z ):
     return 1 / (1 + np.exp(-z))
-
-

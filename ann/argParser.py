@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 
 import argparse
 
@@ -32,8 +38,15 @@ def build_parser():
     parser.add_argument(
         "--lr2",
         type=float,
-        default=0.003,
+        default=0.9,
         help="Learning rate for layer 2.",
+    )
+    parser.add_argument(
+        "--l1-activation-type",
+        dest="actType",
+        type=int,
+        default=1, 
+        help="1: Sigmoid, 2: ReLU",
     )
     parser.add_argument(
         "--weight-scale",
@@ -41,6 +54,13 @@ def build_parser():
         type=float,
         default=0.1,
         help="Scale factor for random weight initialization.",
+    )
+    parser.add_argument(
+        "--weight-skew",
+        dest="weight_skew",
+        type=float,
+        default=0.5,
+        help="random weight range is -0.5 to +0.5 if skew is 0.5. 0 to 1 if skew is zero"
     )
     parser.add_argument(
         "--bias-scale",

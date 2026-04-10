@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 import AnnUtils
 from debug import *
 from heuristics import *
@@ -26,7 +32,6 @@ class SigmoidSLayer:
 
     def __init__ (self, name, shape, lr):
         self.name = name
-        pass
  
     def setPrevLayer (self, prevLayer ):
         self.prevLayer = prevLayer
@@ -63,4 +68,3 @@ class SigmoidSLayer:
         # hadamard product 
         outputError = inputError * self.outputs * (1 - self.outputs)
         return self.prevLayer.backprop(outputError)
-

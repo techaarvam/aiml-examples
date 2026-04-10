@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 VERBOSITY=1
 
 def info(*objects):
@@ -19,4 +25,3 @@ def error(*objects):
 def output(*objects):
     if VERBOSITY >=1:
         print (*objects)
-

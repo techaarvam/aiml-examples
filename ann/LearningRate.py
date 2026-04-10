@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 from argParser import *
 # place holder for further enhancing for different 
 # adaptive learning rate algorithms. 
@@ -18,4 +24,3 @@ class LearningRate:
 
     def getBiasLR(self):
         return self.biasLR
-

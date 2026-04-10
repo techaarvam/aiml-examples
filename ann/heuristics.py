@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 from argParser import *
 from debug import *
 
@@ -24,5 +30,8 @@ class Heuristics:
             f"{key}={value}" for key, value in sorted(self.finalData.items())
         )
         output(f"FINAL {items}")
+
+
+    
 
 heuristics = Heuristics()

@@ -1,3 +1,9 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 from debug import *
 
 # shape has dataset size(n), input size(d), numnodes(m) 
@@ -29,7 +35,7 @@ class WASigmoid:
         self.sigmoid.setPrevLayer(self.weightedAdd)
   
 
-    def setTargets(self, tarets):
+    def setTargets(self, targets):
         self.sigmoid.setTargets(targets)
   
     def setNextLayer(self, nextLayer):

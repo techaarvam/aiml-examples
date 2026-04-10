@@ -1,6 +1,12 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+
 import AnnUtils
 from layers.WASigmoid import *
-#import layers.WAReLU
+from layers.WAReLu import *
 from layers.WASoftMax import *
 from DigitsInput import *
 from LearningRate import *
@@ -12,6 +18,10 @@ debug.VERBOSITY=args.verbosity
 
 from debug import *
 
+# Activation Type constants
+SIGMOID=1
+RELU=2
+
 def main():
    
    dataset = DigitsInput() 
@@ -19,7 +29,11 @@ def main():
    lr2 = LearningRate(LearningRate.TYPE2)
 
    #shape ( n-dataset size, d-inputsize, m-numnodes)
-   layer1 = WASigmoid("LAYER1: WASigmoid", (1000, 64, args.hidden_size), lr1) 
+   if (args.actType == SIGMOID):
+       layer1 = WASigmoid("LAYER1: WASigmoid", (1000, 64, args.hidden_size), lr1) 
+   else:
+       layer1 = WAReLU("LAYER1: WAReLU", (1000, 64, args.hidden_size), lr1) 
+
 
    layer2 = WASoftMax("LAYER2: WASoftMax", (1000, args.hidden_size, 10), lr2)
 
