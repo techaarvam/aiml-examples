@@ -124,6 +124,23 @@ def plot_dual_metric(xs, ys_left, ys_right, xlabel, left_label, right_label, tit
     plt.close(fig)
 
 
+def plot_convergence(epoch_rows, run_names, report_every, metric_key, ylabel, title, out_path):
+    plt.figure(figsize=(7, 4.5))
+    for run_name in run_names:
+        rows = [r for r in epoch_rows if r["run_name"] == run_name]
+        xs = [int(r["epoch_index"]) * report_every for r in rows]
+        ys = [float(r[metric_key]) for r in rows]
+        plt.plot(xs, ys, label=run_name)
+    plt.xlabel("epoch")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+
+
 def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_dir = os.path.join(OUT_ROOT, timestamp)
@@ -132,7 +149,7 @@ def main():
     baseline = {
         "epochs": 1000,
         "verbosity": 1,
-        "report_every": 1,
+        "report_every": 10,
         "hidden_size": 300,
         "lr1": 0.9,
         "lr2": 0.003,
@@ -147,6 +164,11 @@ def main():
         params = deepcopy(baseline)
         params["lr1"] = value
         experiments.append((f"lr1_{value}", params))
+
+    for value in [0.0003, 0.001, 0.003, 0.01, 0.03]:
+        params = deepcopy(baseline)
+        params["lr2"] = value
+        experiments.append((f"lr2_{value}", params))
 
     for value in [50, 100, 300, 500]:
         params = deepcopy(baseline)
@@ -189,6 +211,55 @@ def main():
         "lr1",
         "Learning Rate Sensitivity",
         os.path.join(out_dir, "lr1_accuracy.png"),
+    )
+    plot_convergence(
+        all_epoch_rows,
+        [str(r["run_name"]) for r in lr_rows],
+        int(baseline["report_every"]),
+        "trainingLoss",
+        "training loss",
+        "Learning Rate Convergence: Loss",
+        os.path.join(out_dir, "lr1_convergence_loss.png"),
+    )
+    plot_convergence(
+        all_epoch_rows,
+        [str(r["run_name"]) for r in lr_rows],
+        int(baseline["report_every"]),
+        "trainingAccuracy",
+        "training accuracy",
+        "Learning Rate Convergence: Accuracy",
+        os.path.join(out_dir, "lr1_convergence_accuracy.png"),
+    )
+
+    lr2_rows = sorted(
+        [r for r in summary_rows if str(r["run_name"]).startswith("lr2_")],
+        key=lambda r: float(r["lr2"]),
+    )
+    plot_line(
+        [float(r["lr2"]) for r in lr2_rows],
+        [float(r["trainingAccuracy"]) for r in lr2_rows],
+        [float(r["validationAccuracy"]) for r in lr2_rows],
+        "lr2",
+        "Output Layer Learning Rate Sensitivity",
+        os.path.join(out_dir, "lr2_accuracy.png"),
+    )
+    plot_convergence(
+        all_epoch_rows,
+        [str(r["run_name"]) for r in lr2_rows],
+        int(baseline["report_every"]),
+        "trainingLoss",
+        "training loss",
+        "Output Layer Learning Rate Convergence: Loss",
+        os.path.join(out_dir, "lr2_convergence_loss.png"),
+    )
+    plot_convergence(
+        all_epoch_rows,
+        [str(r["run_name"]) for r in lr2_rows],
+        int(baseline["report_every"]),
+        "trainingAccuracy",
+        "training accuracy",
+        "Output Layer Learning Rate Convergence: Accuracy",
+        os.path.join(out_dir, "lr2_convergence_accuracy.png"),
     )
 
     hidden_rows = sorted(
