@@ -1,0 +1,19 @@
+1. Lets generate circles and squares, different colors too. Also fitting within the 28*28 or getting cut. 
+2. The model needs to suggest circle, rect, cut-circle, cut-rect, neither (so requires cross entropy - its multi-class). Need to generate this data-set. 
+      can generate circles of various origin points and radius but still with-in the range of 0-10, so as to make the data-set simpler. 
+      generate a few triangles, pentagons, haxagons, octagons and mark them as neither!. 
+
+    Lets do this in phases:
+       phase-1: only:  circles, rect, hexagons, pentagons, septagons and octagons , but everything other than circles/rect marked as neighter (3 classes). 
+         Initially also keep the object fully in the 28*28
+       phase-2: Make the dataset more complex as described above with more classes too. 
+
+3. 1 conv layer (+ReLU) -> 1 max pool  -> flatten -> dense (w/ReLU) -> output (w/SoftMax) . Pytorch's autograd would be so convinient here. Lets do this using pytorch instead of numpy that was used for the ANN. gradiants for the convolutions are also easy, but gradiant computation has a cross-corr and conv for the two tensors (V(weights) and X(image)).
+
+4. sklearn.datasets.make_circle can be used for creating the circles. Lets use the RGB color channels too - to help learn setting up the tensors/datasets correctly. make_rect needs to be coded up, sklearn.datasets doesnt seem to have. 
+
+5. For the models (lets make the models from simpler units):
+     conv layer and max pool are good examples to code models from the scratch.
+     ReLu, dense, output are standard layers. (Linear , ReLu , sigmoid, softmax can be used from pytorch directly). 
+
+

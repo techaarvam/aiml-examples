@@ -1,0 +1,5 @@
+make_scatter_circle was coded with an objective of not using any python foreach or other loops. 
+Implement the random circle dataset creation all using torch/numpy native API, indexing and other features.
+Learned "torch.expand" can be handy in starting with a smaller tensor and replicating it (without new memory) to new dimensions.
+
+
