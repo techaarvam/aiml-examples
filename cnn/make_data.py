@@ -1,3 +1,8 @@
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
 import torch
 import numpy as np
 import sklearn
@@ -26,7 +31,7 @@ def display_images(images):
             if inp.strip().lower() == 'q':
                 break
 
-def make_scatter_square():
+def make_scatter_square(requires_grad):
     # Thoughts: get a random left top. Orientation: (0,0) is the overall most left,top
     # random height, width. 
     # constraint: clamp height and width if it crosses past the edge top + height, left + width < 28.
@@ -106,6 +111,7 @@ def make_scatter_square():
     display_images(images)
 
     ret_images = torch.permute(images.unsqueeze(2), (3, 2, 0, 1))
+    ret_images.requires_grad_(requires_grad)
     debug (ret_images.shape)
 
     label = torch.full((num_samples,), RECTANGLE)
@@ -118,7 +124,7 @@ def make_scatter_square():
 # Square was coded after circle and the square look a bit more cleaner. 
 # A pseudo-code to start with always helps.
 
-def make_scatter_circles():
+def make_scatter_circles(requires_grad):
     # sometimes too small circles may look like squares. No explicit reject coded in. 
     # only keeping the lower bound on the radius as 4 - this should reduce the count of bad data,
     # still overall training should be okay. 
@@ -176,6 +182,7 @@ def make_scatter_circles():
     # inputs and outpus were (d,N) (1, N). Here its N, <features> for conv2d, so lets permute and return
 
     ret_images = torch.permute(images.unsqueeze(2), (3, 2, 0, 1))
+    ret_images.requires_grad_(requires_grad)
     debug (ret_images.shape)
 
     label = torch.full((num_samples,), CIRCLE)
@@ -186,9 +193,10 @@ def make_scatter_circles():
  
 
 class DataInput (Dataset):
-    def __init__(self):
-        d1 = make_scatter_square()
-        d2 = make_scatter_circles()
+    def __init__(self, **kwargs):
+        self.requires_grad = kwargs.get('requires_grad', False)
+        d1 = make_scatter_square(self.requires_grad)
+        d2 = make_scatter_circles(self.requires_grad)
  
         self.dataSet = ( torch.concatenate((d1[0], d2[0]), axis=0), torch.concatenate( (d1[1], d2[1]), axis=0))
         
@@ -202,7 +210,7 @@ class DataInput (Dataset):
 
 if __name__ == "__main__":
     # Testing code.
-    set_verbosity(OUTPUT)
+    set_verbosity(INFO)
     set_seed(73)
     d=DataInput ()
     for i in range(0,len(d)):

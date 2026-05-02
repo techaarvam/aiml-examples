@@ -4,11 +4,13 @@
       generate a few triangles, pentagons, haxagons, octagons and mark them as neither!. 
 
     Lets do this in phases:
-       phase-1: only:  circles, rect, hexagons, pentagons, septagons and octagons , but everything other than circles/rect marked as neighter (3 classes). 
+       Phase-0: Only circles and rects and cross entropy loss function. 
+       phase-1 (drop this): only:  circles, rect, hexagons, pentagons, septagons and octagons , but everything other than circles/rect marked as neighter (3 classes). 
          Initially also keep the object fully in the 28*28
-       phase-2: Make the dataset more complex as described above with more classes too. 
+       phase-2 (drop this): Make the dataset more complex as described above with more classes too. 
 
 3. 1 conv layer (+ReLU) -> 1 max pool  -> flatten -> dense (w/ReLU) -> output (w/SoftMax) . Pytorch's autograd would be so convinient here. Lets do this using pytorch instead of numpy that was used for the ANN. gradiants for the convolutions are also easy, but gradiant computation has a cross-corr and conv for the two tensors (V(weights) and X(image)).
+   ** Build atleast 1 model like say conv2d using Module and Parameter, instead of using nn.conv2d. This will help the learning process well **
 
 4. sklearn.datasets.make_circle can be used for creating the circles. Lets use the RGB color channels too - to help learn setting up the tensors/datasets correctly. make_rect needs to be coded up, sklearn.datasets doesnt seem to have. 
 
