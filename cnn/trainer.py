@@ -13,14 +13,15 @@ import numpy as np
 import common
 from torch.utils.data import DataLoader
 from torch import nn
+from argParser import args
 
 
-
-set_seed(73)
-cnn = cnn_models.CNN().to(common.device)
+set_seed(args.seed)
+set_verbosity(args.verbosity)
+cnn = cnn_models.CNN(args.hidden_size).to(common.device)
 
 loss_fn = nn.NLLLoss()
-optimizer = torch.optim.SGD(params =cnn.parameters(), lr=0.1)
+optimizer = torch.optim.SGD(params =cnn.parameters(), lr=args.lr)
 
 d = make_data.DataInput()
 train_size = int(len(d) * 0.8)
@@ -28,12 +29,10 @@ val_size = int(len(d)) - train_size
 
 train_set, val_set = torch.utils.data.random_split(d, [train_size, val_size])
 
-# TBD: Get the batch_size from argParser and remove this comment after
-train_loader = DataLoader(train_set, batch_size=100, shuffle = True)
-val_loader = DataLoader(val_set, batch_size=100 )
+train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle = True)
+val_loader = DataLoader(val_set, batch_size=args.batch_size)
 
-#TBD: get epoch from argparser and then remove this comment
-for i in range(0, 1000):
+for i in range(0, args.epochs):
     train_loss = 0
     train_correct = 0
     
@@ -57,6 +56,7 @@ for i in range(0, 1000):
     with torch.no_grad():
         val_loss = 0
         correct = 0
+        displayed = False
         for inputs, labels in val_loader:
             dInputs, dLabels = inputs.to(common.device), labels.to(common.device)
 
@@ -64,6 +64,20 @@ for i in range(0, 1000):
             val_loss += loss_fn(output, dLabels).item()
             preds = output.argmax(dim=1)
             correct += (preds == dLabels).sum().item()
+            
+            if (not displayed and debug.checkVerbosity(INFO)):
+                probabilities = output.exp()
+                text = []
+                for loop in range(len(preds)):
+                    currentText = ""
+                    if (preds[loop] != dLabels[loop]):
+                        currentText = " ERROR"
+                    else:  currentText = " OK"
+                    text.append( currentText + f" Circle: {probabilities[loop][0]:.2f} Rect: {probabilities[loop][1]:.2f}")
+
+                if (i == args.epochs - 1):
+                    make_data.display_images( dInputs.squeeze(1).permute(1,2,0).cpu() , text)
+                displayed = True
 
         val_loss /= len(val_loader)        
         accuracy = correct / (len(val_set)) 

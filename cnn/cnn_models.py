@@ -73,18 +73,16 @@ class MyConv2D(nn.Module):
 class CNN(nn.Module): 
     # Could have used nn.Sequential too.
     
-    def __init__(self):
+    def __init__(self, hidden_size):
         super().__init__()
                               #  H, W, k
         self.layer_1 = MyConv2D (28, 28, 2)
         self.layer_2 = nn.ReLU ()
         self.layer_3 = nn.MaxPool2d(2)
         self.layer_4 = nn.Flatten()
-        # TBD: Make the 100 and such arguments coming from argParser,
-        # then remove this comment
-        self.layer_5 = nn.Linear ( 14*14, 100) 
+        self.layer_5 = nn.Linear (14*14, hidden_size)
         self.layer_6 = nn.ReLU ()
-        self.layer_7 = nn.Linear (100, 2)
+        self.layer_7 = nn.Linear (hidden_size, 2)
         self.layer_8 = nn.LogSoftmax(dim=1)
 
     def forward(self, x):

@@ -21,11 +21,15 @@ num_dots=100
 CIRCLE=0
 RECTANGLE=1
 
-def display_images(images):
+def display_images(images, extra_text=None):
     if (checkVerbosity(INFO)):
         for i in range(images.shape[2]):
             plt.imshow(images[:, :, i].numpy(), cmap='gray')
-            plt.title(f"Sample {i}")
+            label = ""
+            if extra_text is not None:
+                label = extra_text[i]
+            
+            plt.title(f"Sample {i} {label}")
             plt.show()
             inp = input("Press Enter for next, 'q' to quit: ")
             if inp.strip().lower() == 'q':
