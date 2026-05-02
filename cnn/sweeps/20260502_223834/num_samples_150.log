@@ -1,0 +1,79 @@
+tensor([[21, 15, 16,  9, 16,  4,  7, 10, 21,  9, 17, 16, 18, 23, 23, 17, 12,  8,
+          7,  9, 21, 10,  9, 10,  9, 12, 16, 19, 16,  9, 15, 18,  7,  7, 15,  9,
+         17, 10, 17, 15, 15, 16,  5, 19, 17, 17, 18,  6, 11, 10, 22, 17, 21, 12,
+         13, 13, 19, 18,  5, 12, 15, 15, 19,  8, 19, 20,  8,  9, 11, 13, 13, 14,
+         19, 17, 11, 13, 15, 17,  7,  6,  9, 11, 20, 14,  9,  9, 11,  9, 10, 19,
+         12, 18, 13, 10, 17,  9, 11, 19, 15, 10,  4, 17, 15,  9, 16, 21, 11, 12,
+         21, 20, 23, 18, 13, 12, 11,  7, 11, 13, 23, 13, 13, 18, 16,  6, 20, 11,
+         15, 10, 19, 18, 22, 21, 14, 20,  8, 21,  8, 14,  8, 18, 12, 21,  9, 21,
+         11, 15, 12, 17, 13, 11],
+        [16, 14, 12,  4, 20, 18, 19, 11, 21,  9,  8, 12, 10, 23, 12, 15, 16, 13,
+          9, 19,  7, 18,  5, 10, 23, 24, 20, 23, 14, 20, 11, 14, 21, 21, 13, 24,
+         11, 10, 11, 24,  8, 16,  5,  6, 19, 11, 10, 14, 17, 10, 20, 11,  7, 16,
+          8, 13,  9,  6,  5, 13,  9, 15, 19, 10,  6, 23, 20, 14, 11, 13,  6, 20,
+          9, 17, 12, 10, 13, 14, 19, 21,  9, 11, 20, 15, 21, 19, 11, 12, 16,  9,
+          7, 18, 13, 14, 15,  9, 17, 18, 13, 16,  4, 11, 15,  8, 16,  7, 11, 18,
+          7, 22,  5,  4, 13, 17, 11, 10, 10, 18, 16, 12,  9,  4,  7, 22, 17, 10,
+         13, 22,  5, 14, 23, 17,  9,  7, 17,  7, 14, 11,  8, 18, 12, 21,  6,  7,
+         12, 12, 16, 11, 13,  7]])
+torch.Size([2, 150])
+Epoch: 0, Training Loss: 0.7151897549629211, Accuracy: 0.49583333333333335
+Epoch: 0, Validation Loss: 0.7002623677253723, Accuracy: 0.5166666666666667
+Epoch: 1, Training Loss: 0.7024438579877218, Accuracy: 0.49583333333333335
+Epoch: 1, Validation Loss: 0.6955405473709106, Accuracy: 0.5166666666666667
+Epoch: 2, Training Loss: 0.6999783913294474, Accuracy: 0.49583333333333335
+Epoch: 2, Validation Loss: 0.6917760968208313, Accuracy: 0.5166666666666667
+Epoch: 3, Training Loss: 0.6871267755826315, Accuracy: 0.5166666666666667
+Epoch: 3, Validation Loss: 0.6891275644302368, Accuracy: 0.5166666666666667
+Epoch: 4, Training Loss: 0.6813425620396932, Accuracy: 0.5291666666666667
+Epoch: 4, Validation Loss: 0.6866572499275208, Accuracy: 0.55
+Epoch: 5, Training Loss: 0.676805297533671, Accuracy: 0.5791666666666667
+Epoch: 5, Validation Loss: 0.6838531494140625, Accuracy: 0.5833333333333334
+Epoch: 6, Training Loss: 0.679692010084788, Accuracy: 0.6
+Epoch: 6, Validation Loss: 0.6813305616378784, Accuracy: 0.6166666666666667
+Epoch: 7, Training Loss: 0.6658156712849935, Accuracy: 0.6833333333333333
+Epoch: 7, Validation Loss: 0.6780357956886292, Accuracy: 0.6666666666666666
+Epoch: 8, Training Loss: 0.6632620493570963, Accuracy: 0.6916666666666667
+Epoch: 8, Validation Loss: 0.6745145320892334, Accuracy: 0.6833333333333333
+Epoch: 9, Training Loss: 0.6558024485905966, Accuracy: 0.6916666666666667
+Epoch: 9, Validation Loss: 0.6705559492111206, Accuracy: 0.6833333333333333
+Epoch: 10, Training Loss: 0.6491806904474894, Accuracy: 0.7125
+Epoch: 10, Validation Loss: 0.6662583947181702, Accuracy: 0.7166666666666667
+Epoch: 11, Training Loss: 0.6414403716723124, Accuracy: 0.7166666666666667
+Epoch: 11, Validation Loss: 0.6612595319747925, Accuracy: 0.7166666666666667
+Epoch: 12, Training Loss: 0.6399481892585754, Accuracy: 0.725
+Epoch: 12, Validation Loss: 0.6564533710479736, Accuracy: 0.7
+Epoch: 13, Training Loss: 0.6265079379081726, Accuracy: 0.75
+Epoch: 13, Validation Loss: 0.6504641175270081, Accuracy: 0.7
+Epoch: 14, Training Loss: 0.6240585645039877, Accuracy: 0.7583333333333333
+Epoch: 14, Validation Loss: 0.6439424157142639, Accuracy: 0.75
+Epoch: 15, Training Loss: 0.612061599890391, Accuracy: 0.7541666666666667
+Epoch: 15, Validation Loss: 0.6362733244895935, Accuracy: 0.7
+Epoch: 16, Training Loss: 0.5942661960919698, Accuracy: 0.7625
+Epoch: 16, Validation Loss: 0.6285895705223083, Accuracy: 0.7166666666666667
+Epoch: 17, Training Loss: 0.5849604805310568, Accuracy: 0.7666666666666667
+Epoch: 17, Validation Loss: 0.6193897128105164, Accuracy: 0.7166666666666667
+Epoch: 18, Training Loss: 0.5748891035715739, Accuracy: 0.7875
+Epoch: 18, Validation Loss: 0.6104887127876282, Accuracy: 0.7166666666666667
+Epoch: 19, Training Loss: 0.5583601991335551, Accuracy: 0.7833333333333333
+Epoch: 19, Validation Loss: 0.6000916361808777, Accuracy: 0.7166666666666667
+Epoch: 20, Training Loss: 0.5382410287857056, Accuracy: 0.7916666666666666
+Epoch: 20, Validation Loss: 0.5896658301353455, Accuracy: 0.7166666666666667
+Epoch: 21, Training Loss: 0.5218428373336792, Accuracy: 0.7875
+Epoch: 21, Validation Loss: 0.5795813202857971, Accuracy: 0.7
+Epoch: 22, Training Loss: 0.5017338295777639, Accuracy: 0.8291666666666667
+Epoch: 22, Validation Loss: 0.5683044195175171, Accuracy: 0.7166666666666667
+Epoch: 23, Training Loss: 0.4905797839164734, Accuracy: 0.8166666666666667
+Epoch: 23, Validation Loss: 0.5609229803085327, Accuracy: 0.7166666666666667
+Epoch: 24, Training Loss: 0.4648622969786326, Accuracy: 0.825
+Epoch: 24, Validation Loss: 0.5511795282363892, Accuracy: 0.7166666666666667
+Epoch: 25, Training Loss: 0.45393067598342896, Accuracy: 0.8333333333333334
+Epoch: 25, Validation Loss: 0.5457953214645386, Accuracy: 0.7166666666666667
+Epoch: 26, Training Loss: 0.4382261435190837, Accuracy: 0.8625
+Epoch: 26, Validation Loss: 0.5391945242881775, Accuracy: 0.7333333333333333
+Epoch: 27, Training Loss: 0.4145325720310211, Accuracy: 0.8625
+Epoch: 27, Validation Loss: 0.5298768281936646, Accuracy: 0.7333333333333333
+Epoch: 28, Training Loss: 0.3903585573037465, Accuracy: 0.8666666666666667
+Epoch: 28, Validation Loss: 0.5198969841003418, Accuracy: 0.7666666666666667
+Epoch: 29, Training Loss: 0.3882700900236766, Accuracy: 0.875
+Epoch: 29, Validation Loss: 0.5195575952529907, Accuracy: 0.75

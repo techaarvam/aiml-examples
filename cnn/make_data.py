@@ -35,7 +35,7 @@ def display_images(images, extra_text=None):
             if inp.strip().lower() == 'q':
                 break
 
-def make_scatter_square(requires_grad):
+def make_scatter_square(requires_grad, num_samples):
     # Thoughts: get a random left top. Orientation: (0,0) is the overall most left,top
     # random height, width. 
     # constraint: clamp height and width if it crosses past the edge top + height, left + width < 28.
@@ -128,7 +128,7 @@ def make_scatter_square(requires_grad):
 # Square was coded after circle and the square look a bit more cleaner. 
 # A pseudo-code to start with always helps.
 
-def make_scatter_circles(requires_grad):
+def make_scatter_circles(requires_grad, num_samples):
     # sometimes too small circles may look like squares. No explicit reject coded in. 
     # only keeping the lower bound on the radius as 4 - this should reduce the count of bad data,
     # still overall training should be okay. 
@@ -199,8 +199,9 @@ def make_scatter_circles(requires_grad):
 class DataInput (Dataset):
     def __init__(self, **kwargs):
         self.requires_grad = kwargs.get('requires_grad', False)
-        d1 = make_scatter_square(self.requires_grad)
-        d2 = make_scatter_circles(self.requires_grad)
+        ns = kwargs.get('num_samples', num_samples)
+        d1 = make_scatter_square(self.requires_grad, ns)
+        d2 = make_scatter_circles(self.requires_grad, ns)
  
         self.dataSet = ( torch.concatenate((d1[0], d2[0]), axis=0), torch.concatenate( (d1[1], d2[1]), axis=0))
         

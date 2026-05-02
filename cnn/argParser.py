@@ -34,8 +34,15 @@ def build_parser():
         "--hidden-size",
         dest="hidden_size",
         type=int,
-        default=100,
+        default=22,
         help="Number of nodes in the dense hidden layer.",
+    )
+    parser.add_argument(
+        "--num-samples",
+        dest="num_samples",
+        type=int,
+        default=1000,
+        help="Number of samples per class (circles and rectangles each).",
     )
     parser.add_argument(
         "--seed",

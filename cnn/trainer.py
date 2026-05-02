@@ -23,7 +23,7 @@ cnn = cnn_models.CNN(args.hidden_size).to(common.device)
 loss_fn = nn.NLLLoss()
 optimizer = torch.optim.SGD(params =cnn.parameters(), lr=args.lr)
 
-d = make_data.DataInput()
+d = make_data.DataInput(num_samples=args.num_samples)
 train_size = int(len(d) * 0.8)
 val_size = int(len(d)) - train_size
 

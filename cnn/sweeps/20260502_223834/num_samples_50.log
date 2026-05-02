@@ -1,0 +1,67 @@
+tensor([[ 9, 14, 13, 13, 14,  5,  7, 22, 15, 17,  8, 17, 16, 15,  4, 13, 15, 16,
+         10, 19, 18, 15, 17, 19, 18, 10, 23, 17, 18, 11, 20,  8, 19,  9, 14, 22,
+         13, 15, 16, 16, 17, 13, 17, 22, 13, 17,  8,  7, 21, 16],
+        [ 4, 10, 20, 15, 12,  5,  5, 21, 15, 19, 14, 11, 18, 13, 16, 15, 15, 15,
+         13, 15, 10, 15, 17, 19, 19, 17, 12, 18, 10, 11, 11,  8,  6, 23,  6, 22,
+         15, 13, 16, 19, 21, 13, 17, 12, 20, 17,  8, 17,  5, 16]])
+torch.Size([2, 50])
+Epoch: 0, Training Loss: 0.7082885503768921, Accuracy: 0.5125
+Epoch: 0, Validation Loss: 0.7197672128677368, Accuracy: 0.45
+Epoch: 1, Training Loss: 0.7024221420288086, Accuracy: 0.5125
+Epoch: 1, Validation Loss: 0.7165257930755615, Accuracy: 0.45
+Epoch: 2, Training Loss: 0.6969908475875854, Accuracy: 0.5125
+Epoch: 2, Validation Loss: 0.7135692834854126, Accuracy: 0.45
+Epoch: 3, Training Loss: 0.6919412016868591, Accuracy: 0.5125
+Epoch: 3, Validation Loss: 0.7108515501022339, Accuracy: 0.45
+Epoch: 4, Training Loss: 0.6871315240859985, Accuracy: 0.5125
+Epoch: 4, Validation Loss: 0.7083859443664551, Accuracy: 0.45
+Epoch: 5, Training Loss: 0.6824756860733032, Accuracy: 0.5125
+Epoch: 5, Validation Loss: 0.7060685157775879, Accuracy: 0.45
+Epoch: 6, Training Loss: 0.6779077649116516, Accuracy: 0.5125
+Epoch: 6, Validation Loss: 0.7039065957069397, Accuracy: 0.45
+Epoch: 7, Training Loss: 0.6733865737915039, Accuracy: 0.5125
+Epoch: 7, Validation Loss: 0.7018318176269531, Accuracy: 0.45
+Epoch: 8, Training Loss: 0.668757975101471, Accuracy: 0.5125
+Epoch: 8, Validation Loss: 0.6998022794723511, Accuracy: 0.45
+Epoch: 9, Training Loss: 0.6640325784683228, Accuracy: 0.5125
+Epoch: 9, Validation Loss: 0.6978396773338318, Accuracy: 0.45
+Epoch: 10, Training Loss: 0.6592903733253479, Accuracy: 0.525
+Epoch: 10, Validation Loss: 0.6959149241447449, Accuracy: 0.45
+Epoch: 11, Training Loss: 0.6543537974357605, Accuracy: 0.5375
+Epoch: 11, Validation Loss: 0.6940266489982605, Accuracy: 0.45
+Epoch: 12, Training Loss: 0.6492047905921936, Accuracy: 0.55
+Epoch: 12, Validation Loss: 0.6922133564949036, Accuracy: 0.45
+Epoch: 13, Training Loss: 0.6438626646995544, Accuracy: 0.575
+Epoch: 13, Validation Loss: 0.6903512477874756, Accuracy: 0.45
+Epoch: 14, Training Loss: 0.6382516622543335, Accuracy: 0.625
+Epoch: 14, Validation Loss: 0.6886425614356995, Accuracy: 0.45
+Epoch: 15, Training Loss: 0.6321984529495239, Accuracy: 0.6625
+Epoch: 15, Validation Loss: 0.6869370937347412, Accuracy: 0.45
+Epoch: 16, Training Loss: 0.6257461309432983, Accuracy: 0.7125
+Epoch: 16, Validation Loss: 0.6850744485855103, Accuracy: 0.45
+Epoch: 17, Training Loss: 0.6188611388206482, Accuracy: 0.7375
+Epoch: 17, Validation Loss: 0.683016836643219, Accuracy: 0.45
+Epoch: 18, Training Loss: 0.6115020513534546, Accuracy: 0.7875
+Epoch: 18, Validation Loss: 0.6808110475540161, Accuracy: 0.5
+Epoch: 19, Training Loss: 0.6037028431892395, Accuracy: 0.8125
+Epoch: 19, Validation Loss: 0.6783672571182251, Accuracy: 0.5
+Epoch: 20, Training Loss: 0.5954458117485046, Accuracy: 0.825
+Epoch: 20, Validation Loss: 0.6762005090713501, Accuracy: 0.5
+Epoch: 21, Training Loss: 0.5866885185241699, Accuracy: 0.825
+Epoch: 21, Validation Loss: 0.6741594672203064, Accuracy: 0.5
+Epoch: 22, Training Loss: 0.5773559808731079, Accuracy: 0.8375
+Epoch: 22, Validation Loss: 0.6721492409706116, Accuracy: 0.55
+Epoch: 23, Training Loss: 0.5673903226852417, Accuracy: 0.85
+Epoch: 23, Validation Loss: 0.670046865940094, Accuracy: 0.55
+Epoch: 24, Training Loss: 0.5568157434463501, Accuracy: 0.8875
+Epoch: 24, Validation Loss: 0.6679319739341736, Accuracy: 0.6
+Epoch: 25, Training Loss: 0.5455740094184875, Accuracy: 0.8875
+Epoch: 25, Validation Loss: 0.665820300579071, Accuracy: 0.6
+Epoch: 26, Training Loss: 0.5335230827331543, Accuracy: 0.8875
+Epoch: 26, Validation Loss: 0.6638294458389282, Accuracy: 0.6
+Epoch: 27, Training Loss: 0.5208686590194702, Accuracy: 0.8875
+Epoch: 27, Validation Loss: 0.661871075630188, Accuracy: 0.6
+Epoch: 28, Training Loss: 0.5076717138290405, Accuracy: 0.8875
+Epoch: 28, Validation Loss: 0.6601568460464478, Accuracy: 0.6
+Epoch: 29, Training Loss: 0.49392038583755493, Accuracy: 0.875
+Epoch: 29, Validation Loss: 0.6588636040687561, Accuracy: 0.6
