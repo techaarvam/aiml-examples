@@ -1,0 +1,33 @@
+Raw text -> NLTK tokenize -> Word2Vec
+
+Implement GRU.
+Instead of using standard nn.RNN, implement the pieces ground up.
+
+
+Pieces needed:
+   ResetGate
+   UpdateGate
+   CandidateHiddenState
+   HiddenState
+   Output
+
+
+Inputs:
+    Word2Vec. 
+
+Details:
+    A long training sequence to be used. Word2Vec converted book.
+    Each next word predction will backprop the loss function
+    and update the hidden states. 
+
+Loss function choices:
+    Option 1:
+        Output could be a token index in the vocabulary
+        softmax/cross-entropy loss could be used.
+    Option 2:
+        Output is n-dim vector and loss function is MSE.
+        nearest_word = wv.most_similar([OUTPUT], topn=1)
+
+    Implement option-2 first, then option-1 to do a subjective 
+    comparison. 
+   
