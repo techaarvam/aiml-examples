@@ -75,6 +75,14 @@ def build_parser():
         help="Hidden state dimension size.",
     )
     parser.add_argument(
+        "--output-mode",
+        dest="output_mode",
+        type=str,
+        default="glove",
+        choices=["glove", "softmax"],
+        help="Output mode: glove (MSE on vectors) or softmax (cross-entropy over vocabulary).",
+    )
+    parser.add_argument(
         "--model-file",
         dest="model_file",
         type=str,

@@ -4,6 +4,7 @@
 # Author: Ram (Ramasubramanian B)
 # --------------------------------------------------
 import DataInput
+import DataInputSoftmax
 import numpy as np
 import torch
 import langRNN
@@ -20,15 +21,26 @@ import random
 set_seed(args.seed)
 set_verbosity(args.verbosity)
 
-d = DataInput.DataInput()
-vecDim = d.getInputSize()
-rnn = langRNN.langRNN(vecDim, args.hidden_dim).to(common.device)
+if args.output_mode == "softmax":
+    d = DataInputSoftmax.DataInputSoftmax()
+    vecDim = d.getInputSize()
+    vocab_size = d.getVocabSize()
+    vocab = d.getVocab()
+    rnn = langRNN.langRNN(vecDim, args.hidden_dim, vocab_size).to(common.device)
+else:
+    d = DataInput.DataInput()
+    vecDim = d.getInputSize()
+    rnn = langRNN.langRNN(vecDim, args.hidden_dim).to(common.device)
 
 if args.model_file:
     rnn.load_state_dict(torch.load(args.model_file, map_location=common.device))
     dbg_output(f"Loaded model from {args.model_file}")
 else:
-    loss_fn = nn.MSELoss()
+    if args.output_mode == "softmax":
+        loss_fn = nn.CrossEntropyLoss()
+    else:
+        loss_fn = nn.MSELoss()
+
     if args.optimizer == "adam":
         optimizer = torch.optim.Adam(params=rnn.parameters(), lr=args.lr)
     else:
@@ -37,7 +49,7 @@ else:
     # Lets not do the random_split for this case.
     # Lets make the next word generation interactive as a chat bot!. No validation error measurement then!
 
-    train_loader = DataLoader(d, batch_size = args.batch_size)
+    train_loader = DataLoader(d, batch_size=args.batch_size)
 
     for i in range(0, args.epochs):
         total_loss = 0.0
@@ -56,41 +68,68 @@ else:
             optimizer.step()
 
             total_loss += loss.item()
-            total_cos += torch.nn.functional.cosine_similarity(output.detach(), dLabels, dim=1).mean().item()
+            if args.output_mode == "glove":
+                total_cos += torch.nn.functional.cosine_similarity(output.detach(), dLabels, dim=1).mean().item()
             num_batches += 1
 
-        dbg_output(f"Epoch {i+1}: loss={total_loss/num_batches:.4f}  cosine_sim={total_cos/num_batches:.4f}")
+        if args.output_mode == "glove":
+            dbg_output(f"Epoch {i+1}: loss={total_loss/num_batches:.4f}  cosine_sim={total_cos/num_batches:.4f}")
+        else:
+            dbg_output(f"Epoch {i+1}: loss={total_loss/num_batches:.4f}")
 
     torch.save(rnn.state_dict(), args.input + ".model.pt")
     dbg_output(f"Model saved to {args.input}.model.pt")
 
-wordVecs = d.getWordVecs()
+
+def get_input_vectors(userTokens, wordVecs, vecDim):
+    vectors = []
+    for token in userTokens:
+        if token in wordVecs:
+            vectors.append(wordVecs[token])
+        else:
+            vectors.append(np.zeros(vecDim))
+        if len(vectors) == args.window_size: break
+    while len(vectors) < args.window_size:
+        vectors.append(np.zeros(vecDim))
+    return torch.tensor(np.array(vectors), dtype=torch.float32).unsqueeze(0).to(common.device)
+
+
+def predict_next_word(output):
+    if args.output_mode == "softmax":
+        probs = torch.softmax(output.squeeze(0), dim=-1)
+        topk = torch.topk(probs, k=1)
+        idx = random.choice(topk.indices.tolist())
+        return vocab[idx], None
+    else:
+        word = random.choice(wordVecs.similar_by_vector(output.squeeze(0).cpu().numpy(), topn=5))[0]
+        vec = torch.tensor(wordVecs[word], dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(common.device)
+        return word, vec
+
+
+if args.output_mode == "glove":
+    wordVecs = d.getWordVecs()
+else:
+    wordVecs = DataInput.DataInput.__new__(DataInput.DataInput)
+    import gensim.downloader as api
+    wordVecs = api.load("glove-wiki-gigaword-100")
 
 print(f"Enter {args.window_size} words (space separated):")
 userInput = input()
 userTokens = word_tokenize(userInput.lower())
-
-vectors = []
-for token in userTokens:
-    if token in wordVecs:
-        vectors.append(wordVecs[token])
-    else:
-        vectors.append(np.zeros(100))
-    if len(vectors) == args.window_size: break
-while len(vectors) < args.window_size:
-    vectors.append(np.zeros(100))
-
-vectors = torch.tensor(np.array(vectors), dtype=torch.float32)
-vectors = vectors.unsqueeze(0).to(common.device)
-
+vectors = get_input_vectors(userTokens, wordVecs, vecDim)
 generated = list(userTokens[:args.window_size])
 
 for i in range(0, args.output_size):
     with torch.no_grad():
         output = rnn.forward(vectors)
-        word = random.choice(wordVecs.similar_by_vector(output.squeeze(0).cpu().numpy(), topn=5))[0]
+        word, vec = predict_next_word(output)
         generated.append(word)
-        vectors = torch.cat((vectors, output.unsqueeze(1)), dim=1)[:,1:,:]
+        if args.output_mode == "softmax":
+            if word in wordVecs:
+                vec = torch.tensor(wordVecs[word], dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(common.device)
+            else:
+                vec = torch.zeros(1, 1, vecDim).to(common.device)
+        vectors = torch.cat((vectors, vec), dim=1)[:,1:,:]
 
 print(" ".join(generated))
 
@@ -102,24 +141,19 @@ while True:
         print(f"Enter {args.window_size} words (space separated):")
         userInput = input()
         userTokens = word_tokenize(userInput.lower())
-        vectors = []
-        for token in userTokens:
-            if token in wordVecs:
-                vectors.append(wordVecs[token])
-            else:
-                vectors.append(np.zeros(100))
-            if len(vectors) == args.window_size: break
-        while len(vectors) < args.window_size:
-            vectors.append(np.zeros(100))
-        vectors = torch.tensor(np.array(vectors), dtype=torch.float32)
-        vectors = vectors.unsqueeze(0).to(common.device)
+        vectors = get_input_vectors(userTokens, wordVecs, vecDim)
         generated = list(userTokens[:args.window_size])
     else:
         with torch.no_grad():
             output = rnn.forward(vectors)
-            word = random.choice(wordVecs.similar_by_vector(output.squeeze(0).cpu().numpy(), topn=5))[0]
+            word, vec = predict_next_word(output)
             generated.append(word)
-            vectors = torch.cat((vectors, output.unsqueeze(1)), dim=1)[:,1:,:]
+            if args.output_mode == "softmax":
+                if word in wordVecs:
+                    vec = torch.tensor(wordVecs[word], dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(common.device)
+                else:
+                    vec = torch.zeros(1, 1, vecDim).to(common.device)
+            vectors = torch.cat((vectors, vec), dim=1)[:,1:,:]
     print(" ".join(generated))
 
 

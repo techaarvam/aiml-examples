@@ -13,7 +13,7 @@ import DataInput
 
 # The top level model (output)
 class langRNN(nn.Module):
-    def __init__(self, dim, hidden_dim):
+    def __init__(self, dim, hidden_dim, vocab_size=None):
         super().__init__()
         self.rg = ResetGate(dim, hidden_dim)
         self.ug = UpdateGate(dim, hidden_dim)
@@ -25,10 +25,12 @@ class langRNN(nn.Module):
         # must not be updated by backprop
         self.register_buffer('h', torch.zeros(args.batch_size, hidden_dim), persistent=False)
 
+        # softmax mode: output over vocab; glove mode: output into embedding space
+        output_size = vocab_size if vocab_size is not None else dim
         self.mlp = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim),
             nn.Tanh(),
-            nn.Linear(hidden_dim, dim)
+            nn.Linear(hidden_dim, output_size)
         )
 
     def forward(self, full_x):
