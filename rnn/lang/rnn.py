@@ -64,6 +64,8 @@ else:
 
             loss = loss_fn(output, dLabels)
             loss.backward()
+            # Hack?!
+            torch.nn.utils.clip_grad_norm_(rnn.parameters(), max_norm=1.0)
 
             optimizer.step()
 
@@ -144,16 +146,17 @@ while True:
         vectors = get_input_vectors(userTokens, wordVecs, vecDim)
         generated = list(userTokens[:args.window_size])
     else:
-        with torch.no_grad():
-            output = rnn.forward(vectors)
-            word, vec = predict_next_word(output)
-            generated.append(word)
-            if args.output_mode == "softmax":
-                if word in wordVecs:
-                    vec = torch.tensor(wordVecs[word], dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(common.device)
-                else:
-                    vec = torch.zeros(1, 1, vecDim).to(common.device)
-            vectors = torch.cat((vectors, vec), dim=1)[:,1:,:]
+        for _ in range(args.output_size):
+            with torch.no_grad():
+                output = rnn.forward(vectors)
+                word, vec = predict_next_word(output)
+                generated.append(word)
+                if args.output_mode == "softmax":
+                    if word in wordVecs:
+                        vec = torch.tensor(wordVecs[word], dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(common.device)
+                    else:
+                        vec = torch.zeros(1, 1, vecDim).to(common.device)
+                vectors = torch.cat((vectors, vec), dim=1)[:,1:,:]
     print(" ".join(generated))
 
 

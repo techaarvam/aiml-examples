@@ -1,0 +1,31 @@
+((pyenv1)) ~/work/learn/aiml/rnn/lang % python rnn.py --num-layers 3 --window-size 8 --hidden-dim 128 --optimizer adam --lr 0.001 --epoch 100 --input raw_data/combined.txt --output-mode softmax --output-size 50 --batch-size 1024 --model-file raw_data/model_3l_8ws_hd128_lr001_adam_softmax_e100_bs1024.pt
+Vocabulary size: 50020
+Loaded model from raw_data/model_3l_8ws_hd128_lr001_adam_softmax_e100_bs1024.pt
+Enter 8 words (space separated):
+the coffee was near the thermometer
+the coffee was near the thermometer , and the other was a significant , luminous , and indescribable , and startling . “ i am sure , ” said holmes , “ i have no doubt that i am not intruding . i have no doubt that i should not be able to unseat the insurance
+
+Press Enter to generate more, n for new input, or q to quit: n
+Enter 8 words (space separated):
+the forest was dense the ambiance erry
+the forest was dense the ambiance erry
+
+Press Enter to generate more, n for new input, or q to quit:
+the forest was dense the ambiance erry , and the driver was , “ i am sure , ” said he , “ i have been very much forbearing , ” said holmes . “ i am not intruding at the coronet , and i was glad to be glad to be a little more than i
+
+Press Enter to generate more, n for new input, or q to quit: n
+Enter 8 words (space separated):
+the music was pleasent the door was open
+the music was pleasent the door was open
+
+Press Enter to generate more, n for new input, or q to quit:
+the music was pleasent the door was open , and i was glad that i had been a philanthropist , and i was not aware that i had been a little fastening , and i could not have been at the door . “ ‘ i am not afraid , ” said holmes , “ but i have
+
+Press Enter to generate more, n for new input, or q to quit: n
+Enter 8 words (space separated):
+watson was a great friend of the great
+watson was a great friend of the great
+
+Press Enter to generate more, n for new input, or q to quit:
+watson was a great friend of the great unobservant man , who had been puffing down in the recess , and i had a little pile of paper , and the beech and electric organs , and the creaking of the dregs . “ i have been a little of the kind. ” “ i am sure that
+

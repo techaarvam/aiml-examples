@@ -96,6 +96,13 @@ def build_parser():
         choices=["sgd", "adam"],
         help="Optimizer to use: sgd or adam.",
     )
+    parser.add_argument(
+        "--num-layers",
+        dest="num_layers",
+        type=int,
+        default=1,
+        help="Number of stacked GRU layers.",
+    )
 
     return parser
 
