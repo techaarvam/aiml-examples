@@ -72,9 +72,9 @@ CROSSFADE_MS = 25     # overlap between consecutive notes to eliminate boundary 
 # Stroke cycle for Mayamalavagowla: Pa(low) Sa Sa Sa(low)
 # Each entry: (scale_degree, octave_offset)
 DRONE_STROKE_SEQUENCE = [
-    (4, -1, 1),   # Pa  – G3  (low Pa, one octave below middle)
-    (0,  0, 2),   # Sa  – C4
-    (0, -1, 1),   # Sa  – C3  (low Sa, one octave below middle)
+    (4, -1, 2),   # Pa  – G3  (low Pa, one octave below middle)
+    (0,  0, 4),   # Sa  – C4
+    (0, -1, 2),   # Sa  – C3  (low Sa, one octave below middle)
 ]
 DRONE_STROKE_EIGHTHS = 2      # eighths between successive plucks
 DRONE_CYCLE_EIGHTHS  = 8      # full cycle length (= 4 strokes × 2 eighths)
@@ -98,14 +98,15 @@ DRONE_FADE_MS   = 20     # fade-in/out at edges to avoid clicks (milliseconds)
 
 def load_dataset(path=DATASET_PATH):
     data = np.load(path)
-    n = data['scale_degree'].shape[0]
+    n = data['melody_raw'].shape[0]
     samples = []
     for i in range(n):
+        mr = data['melody_raw'][i]
         samples.append({
-            'scale_degree': data['scale_degree'][i],
-            'melody_raw':   data['melody_raw'][i],
-            'accent':       data['accent'][i],
-            'beat_pos':     data['beat_pos'][i],
+            'melody_raw':    mr,
+            'scale_degree':  mr % 7,
+            'accent':        data['accent'][i],
+            'note_boundary': data['note_boundary'][i],
         })
     info(f"Loaded {n} samples from {path}")
     return samples
@@ -190,6 +191,10 @@ def synthesise_drone(duration_s, eighth_duration=EIGHTH_DURATION):
         if peak > 0:
             stroke_wave /= peak
         stroke_wave *= drone_envelope(sw_len)
+
+        attack_s = min(fade_samps, sw_len // 4)
+        if attack_s > 0:
+            stroke_wave[:attack_s] *= np.linspace(0.0, 1.0, attack_s)
 
         if sw_len < decay_samples:
             fade = min(fade_samps, sw_len // 2)
@@ -391,7 +396,7 @@ def save_wav(array, path, target_lufs=TARGET_LUFS):
     actual_db = 20.0 * np.log10(np.sqrt(np.mean(array ** 2)))
     pcm = (array * 32767).astype(np.int16)
     wavfile.write(path, SAMPLE_RATE, pcm)
-    output(f"  Wrote {path}  ({len(array)/SAMPLE_RATE:.2f}s  RMS={actual_db:.1f} dBFS)")
+    dbg_output(f"  Wrote {path}  ({len(array)/SAMPLE_RATE:.2f}s  RMS={actual_db:.1f} dBFS)")
 
 # ── Stitch to MP4 ─────────────────────────────────────────────────────────────
 
@@ -421,7 +426,7 @@ def stitch_to_mp4(wav_paths, out_path):
         out_path,
     ]
 
-    output(f"Stitching {len(wav_paths)} files → {out_path} ...")
+    dbg_output(f"Stitching {len(wav_paths)} files → {out_path} ...")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
@@ -429,7 +434,7 @@ def stitch_to_mp4(wav_paths, out_path):
             warn(result.stderr[-400:])   # last 400 chars of stderr is usually the error
         else:
             size_mb = os.path.getsize(out_path) / 1_048_576
-            output(f"  Done → {out_path}  ({size_mb:.1f} MB)")
+            dbg_output(f"  Done → {out_path}  ({size_mb:.1f} MB)")
     finally:
         os.unlink(list_path)
 
@@ -460,7 +465,7 @@ def main():
     n_synth  = len(samples) if args.all else min(args.n, len(samples))
     timbre   = args.timbre
 
-    output(f"Synthesising {n_synth} sample(s)  timbre={timbre}  "
+    dbg_output(f"Synthesising {n_synth} sample(s)  timbre={timbre}  "
            f"beat={args.beat}s ({bpm:.0f} BPM)  outdir={args.outdir}")
 
     wav_paths = []
@@ -474,9 +479,9 @@ def main():
         if i == 0:
             debug_path = os.path.join(args.outdir, 'debug_sample.wav')
             save_wav(wav.copy(), debug_path)
-            output(f"  Debug copy → {debug_path}")
+            dbg_output(f"  Debug copy → {debug_path}")
 
-    output(f"Done. {n_synth} file(s) written to {args.outdir}/")
+    dbg_output(f"Done. {n_synth} file(s) written to {args.outdir}/")
 
     if args.all:
         mp4_path = os.path.join(args.outdir, 'all_samples.mp4')

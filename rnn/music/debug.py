@@ -21,20 +21,20 @@ def checkVerbosity(level):
 
 def info(*objects):
     if checkVerbosity(INFO):
-        print(*objects)
+        print (*objects)
 
 def debug(*objects):
     if checkVerbosity(DEBUG):
-        print(*objects)
+        print (*objects)
 
 def warn(*objects):
     if checkVerbosity(WARN):
-        print(*objects)
+        print (*objects)
 
 def error(*objects):
     if checkVerbosity(ERROR):
-        print(*objects)
+        print (*objects)
 
-def output(*objects):
+def dbg_output(*objects):
     if checkVerbosity(OUTPUT):
-        print(*objects)
+        print (*objects)

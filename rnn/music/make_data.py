@@ -7,6 +7,7 @@ import numpy as np
 import random
 from debug import *
 from seeder import *
+from validate import validate_dataset
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -29,12 +30,12 @@ PATTERNS = {
     'held_release':      [(4,2),(2,1),(2,2)],
     'dense_run':         [(1,1),(1,1),(1,1),(1,1),(1,1),(1,1),(1,1),(1,1)],
     't332_run':          [(1,2),(1,1),(1,1),(1,2),(1,1),(1,1),(1,2),(1,1)],
-    'slow332_run':       [(2,2),(2,1),(2,1),(2,2)],
-    'slow332_remain':    [(2,1),(2,1),(2,2),(2,1)],
+    'slow332_run':       [(2,2),(2,1),(2,1),(2,2),(2,1),(2,1),(2,2),(2,1)],
     'sparse':            [(4,2),(4,1)],
     'push_pull':         [(1,0),(3,2),(1,0),(3,2)],
     'cadence':           [(2,1),(2,1),(4,2)],
     'ornament_run':      [(1,2),(1,1),(1,0),(1,1),(2,2),(2,1)],
+    'thathimidhim':      [(2,1),(1,1),(1,1),(1,1),(2,1),(1,1),(2,1),(1,1)],
 }
 
 MAIN_PATTERNS = [k for k in PATTERNS if k != 'cadence']
@@ -174,45 +175,7 @@ def generate_dataset(num_samples=NUM_SAMPLES, seq_len=SEQ_LEN):
         'note_boundary': all_note_boundary,
     }
 
-# ── Validation ─────────────────────────────────────────────────────────────────
-
-def validate_dataset(dataset):
-    """Print warnings for any out-of-spec values; does not raise."""
-    ok = True
-    n, seq_len = dataset['scale_degree'].shape
-
-    if not np.all((dataset['scale_degree'] >= 0) & (dataset['scale_degree'] <= 6)):
-        warn("VALIDATION FAIL: scale_degree out of [0, 6]")
-        ok = False
-
-    if not np.all((dataset['melody_raw'] >= -MELODY_CLAMP) & (dataset['melody_raw'] <= MELODY_CLAMP)):
-        warn(f"VALIDATION FAIL: melody_raw out of [{-MELODY_CLAMP}, {MELODY_CLAMP}]")
-        ok = False
-
-    if not np.all((dataset['accent'] >= 0) & (dataset['accent'] <= 2)):
-        warn("VALIDATION FAIL: accent out of [0, 2]")
-        ok = False
-
-    # Consecutive melody steps must never differ by more than 1 (single-delta guarantee).
-    diffs = np.abs(np.diff(dataset['melody_raw'], axis=1))
-    if np.any(diffs > 1):
-        n_bad = int(np.sum(diffs > 1))
-        warn(f"VALIDATION FAIL: {n_bad} consecutive melody_raw pairs differ by > 1")
-        ok = False
-
-    # Rhythm block length: every BLOCK_LEN-wide window must sum accent counts to BLOCK_LEN
-    n_blocks = seq_len // BLOCK_LEN
-    for bi in range(n_blocks):
-        block_accents = dataset['accent'][:, bi*BLOCK_LEN:(bi+1)*BLOCK_LEN]
-        # Accent array is dense (one entry per eighth), so block width == BLOCK_LEN always;
-        # check that no sample's block overflowed by verifying the stride is consistent.
-        if block_accents.shape[1] != BLOCK_LEN:
-            warn(f"VALIDATION FAIL: rhythm block {bi} has width {block_accents.shape[1]} != {BLOCK_LEN}")
-            ok = False
-            break
-
-    if ok:
-        output("VALIDATION: all checks passed.")
+# validate_dataset is imported from validate.py
 
 # ── Visualisation ──────────────────────────────────────────────────────────────
 
@@ -227,26 +190,26 @@ def visualise_sample(sample):
     boundary_line= ''.join('|' if b else ' ' for b in sample['note_boundary'])
     accent_line  = ''.join(_ACCENT_CHAR[a] for a in sample['accent'])
 
-    output(f"\n{'─'*70}")
-    output(f"  Melody (Mayamalavagowla degree)   | = note boundary")
-    output(f"  Accent: . soft   - medium   | strong")
-    output(f"  melody_raw range: [{sample['melody_raw'].min():+3d} .. {sample['melody_raw'].max():+3d}]")
-    output(f"{'─'*70}")
+    dbg_output(f"\n{'─'*70}")
+    dbg_output(f"  Melody (Mayamalavagowla degree)   | = note boundary")
+    dbg_output(f"  Accent: . soft   - medium   | strong")
+    dbg_output(f"  melody_raw range: [{sample['melody_raw'].min():+3d} .. {sample['melody_raw'].max():+3d}]")
+    dbg_output(f"{'─'*70}")
 
     for start in range(0, seq_len, _BAND):
         end = min(start + _BAND, seq_len)
         raw_slice = sample['melody_raw'][start:end]
-        output(f"t={start:03d}  {melody_line[start:end]}   raw=[{raw_slice.min():+3d}..{raw_slice.max():+3d}]")
-        output(f"bound= {boundary_line[start:end]}")
-        output(f"       {accent_line[start:end]}")
+        dbg_output(f"t={start:03d}  {melody_line[start:end]}   raw=[{raw_slice.min():+3d}..{raw_slice.max():+3d}]")
+        dbg_output(f"bound= {boundary_line[start:end]}")
+        dbg_output(f"       {accent_line[start:end]}")
 
-    output(f"{'─'*70}")
+    dbg_output(f"{'─'*70}")
 
 # ── Save / Load ────────────────────────────────────────────────────────────────
 
 def save_dataset(dataset, path='music_dataset.npz'):
     np.savez(path, **dataset)
-    output(f"Saved → {path}  shape={dataset['scale_degree'].shape}")
+    dbg_output(f"Saved → {path}  shape={dataset['scale_degree'].shape}")
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
@@ -279,6 +242,6 @@ if __name__ == "__main__":
     vis_rng = np.random.default_rng(seed=7)
     indices = vis_rng.choice(args.n, size=min(3, args.n), replace=False)
     for idx in indices:
-        output(f"\n{'═'*70}")
-        output(f"  Sample {idx}")
+        dbg_output(f"\n{'═'*70}")
+        dbg_output(f"  Sample {idx}")
         visualise_sample({k: v[idx] for k, v in dataset.items()})
