@@ -17,17 +17,6 @@ NUM_SAMPLES  = 2000
 
 SCALE_NAMES  = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
 
-# Cascaded single-firing level table: (level_index, period_in_eighths), slowest first.
-# At each timestep exactly one level fires — the slowest whose period divides t.
-LEVEL_PERIODS = [
-    (0, 32),   # Paragraph  — fires when t % 32 == 0
-    (1, 16),   # Ultra-slow — fires when t % 16 == 0
-    (2,  8),   # Super-slow — fires when t %  8 == 0
-    (3,  4),   # Slow       — fires when t %  4 == 0
-    (4,  2),   # At-rate    — fires when t %  2 == 0
-    (5,  1),   # Fast       — fires every remaining timestep
-]
-
 # ── Rhythm patterns ────────────────────────────────────────────────────────────
 
 PATTERNS = {
@@ -39,6 +28,9 @@ PATTERNS = {
     'gallop':            [(1,2),(1,0),(2,1),(1,2),(1,0),(2,1)],
     'held_release':      [(4,2),(2,1),(2,2)],
     'dense_run':         [(1,1),(1,1),(1,1),(1,1),(1,1),(1,1),(1,1),(1,1)],
+    't332_run':          [(1,2),(1,1),(1,1),(1,2),(1,1),(1,1),(1,2),(1,1)],
+    'slow332_run':       [(2,2),(2,1),(2,1),(2,2)],
+    'slow332_remain':    [(2,1),(2,1),(2,2),(2,1)],
     'sparse':            [(4,2),(4,1)],
     'push_pull':         [(1,0),(3,2),(1,0),(3,2)],
     'cadence':           [(2,1),(2,1),(4,2)],
@@ -49,45 +41,28 @@ MAIN_PATTERNS = [k for k in PATTERNS if k != 'cadence']
 
 # ── Melody generation ──────────────────────────────────────────────────────────
 
-def which_level_fires(t):
-    """Return the index of the slowest level whose period divides t exactly."""
-    for level, period in LEVEL_PERIODS:
-        if t % period == 0:
-            return level
-    return 5   # unreachable — level 5 (period=1) always matches
-
-
-def update_melody(running_pos, t):
-    """Fire the appropriate level, draw one delta, return (new_pos, level, delta)."""
-    level = which_level_fires(t)
-    delta = random.choice([-1, 0, 1])
-    new_pos = int(np.clip(running_pos + delta, -MELODY_CLAMP, MELODY_CLAMP))
-    return new_pos, level, delta
-
-
-def generate_melody(seq_len):
+def generate_melody(seq_len, note_boundary):
     """
-    Cascaded single-firing melody generator.
+    Rhythm-coupled melody generator.
 
-    At each timestep exactly one level fires — the slowest whose period divides t.
-    A single delta ±1 or 0 is added to one shared running position, guaranteeing
-    consecutive melody values never differ by more than 1.
+    Pitch advances by ±1 or 0 only at rhythm note boundaries; held constant
+    within a note. This guarantees melody and rhythm are always in lockstep and
+    consecutive melody_raw values never differ by more than 1.
 
-    Returns (melody_raw_arr, scale_degree_arr, level_fired_arr).
+    Returns (melody_raw_arr, scale_degree_arr).
     """
     running_pos      = 0
     melody_raw_arr   = np.zeros(seq_len, dtype=int)
     scale_degree_arr = np.zeros(seq_len, dtype=int)
-    level_fired_arr  = np.zeros(seq_len, dtype=int)
 
     for t in range(seq_len):
-        running_pos, level, delta = update_melody(running_pos, t)
-
+        if note_boundary[t]:
+            delta       = random.choice([-1, 0, 1])
+            running_pos = int(np.clip(running_pos + delta, -MELODY_CLAMP, MELODY_CLAMP))
         melody_raw_arr[t]   = running_pos
         scale_degree_arr[t] = running_pos % 7
-        level_fired_arr[t]  = level
 
-    return melody_raw_arr, scale_degree_arr, level_fired_arr
+    return melody_raw_arr, scale_degree_arr
 
 # ── Rhythm generation ──────────────────────────────────────────────────────────
 
@@ -157,7 +132,7 @@ def generate_rhythm(seq_len=SEQ_LEN):
 
 def generate_sample(seq_len=SEQ_LEN):
     accent, beat_pos, note_boundary, note_dur = generate_rhythm(seq_len)
-    melody_raw, scale_degree, level_fired    = generate_melody(seq_len)
+    melody_raw, scale_degree                  = generate_melody(seq_len, note_boundary)
     return {
         'scale_degree':  scale_degree,
         'melody_raw':    melody_raw,
@@ -165,7 +140,6 @@ def generate_sample(seq_len=SEQ_LEN):
         'beat_pos':      beat_pos,
         'note_dur':      note_dur,
         'note_boundary': note_boundary,
-        'level_fired':   level_fired,
     }
 
 
@@ -178,7 +152,6 @@ def generate_dataset(num_samples=NUM_SAMPLES, seq_len=SEQ_LEN):
     all_beat_pos      = np.zeros((num_samples, seq_len), dtype=float)
     all_note_dur      = np.zeros((num_samples, seq_len), dtype=int)
     all_note_boundary = np.zeros((num_samples, seq_len), dtype=bool)
-    all_level_fired   = np.zeros((num_samples, seq_len), dtype=int)
 
     for i in range(num_samples):
         if checkVerbosity(INFO) and i % 200 == 0:
@@ -190,7 +163,6 @@ def generate_dataset(num_samples=NUM_SAMPLES, seq_len=SEQ_LEN):
         all_beat_pos[i]      = s['beat_pos']
         all_note_dur[i]      = s['note_dur']
         all_note_boundary[i] = s['note_boundary']
-        all_level_fired[i]   = s['level_fired']
 
     info(f"Done.")
     return {
@@ -200,7 +172,6 @@ def generate_dataset(num_samples=NUM_SAMPLES, seq_len=SEQ_LEN):
         'beat_pos':      all_beat_pos,
         'note_dur':      all_note_dur,
         'note_boundary': all_note_boundary,
-        'level_fired':   all_level_fired,
     }
 
 # ── Validation ─────────────────────────────────────────────────────────────────
@@ -250,14 +221,14 @@ _ACCENT_CHAR = ['.', '-', '|']
 _BAND        = 32   # timesteps per display row
 
 def visualise_sample(sample):
-    """ASCII piano-roll: melody, level-fired hierarchy, and accent markers."""
-    seq_len     = len(sample['scale_degree'])
-    melody_line = ''.join(SCALE_NAMES[d]        for d in sample['scale_degree'])
-    level_line  = ''.join(str(l)                for l in sample['level_fired'])
-    accent_line = ''.join(_ACCENT_CHAR[a]       for a in sample['accent'])
+    """ASCII piano-roll: melody, note boundaries, and accent markers."""
+    seq_len      = len(sample['scale_degree'])
+    melody_line  = ''.join(SCALE_NAMES[d]  for d in sample['scale_degree'])
+    boundary_line= ''.join('|' if b else ' ' for b in sample['note_boundary'])
+    accent_line  = ''.join(_ACCENT_CHAR[a] for a in sample['accent'])
 
     output(f"\n{'─'*70}")
-    output(f"  Melody (C-major note)   level: 0=Paragraph 1=UltraSlow … 5=Fast")
+    output(f"  Melody (Mayamalavagowla degree)   | = note boundary")
     output(f"  Accent: . soft   - medium   | strong")
     output(f"  melody_raw range: [{sample['melody_raw'].min():+3d} .. {sample['melody_raw'].max():+3d}]")
     output(f"{'─'*70}")
@@ -266,7 +237,7 @@ def visualise_sample(sample):
         end = min(start + _BAND, seq_len)
         raw_slice = sample['melody_raw'][start:end]
         output(f"t={start:03d}  {melody_line[start:end]}   raw=[{raw_slice.min():+3d}..{raw_slice.max():+3d}]")
-        output(f"level= {level_line[start:end]}")
+        output(f"bound= {boundary_line[start:end]}")
         output(f"       {accent_line[start:end]}")
 
     output(f"{'─'*70}")
