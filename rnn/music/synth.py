@@ -77,7 +77,7 @@ DRONE_STROKE_SEQUENCE = [
     (0, -1, 2),   # Sa  – C3  (low Sa, one octave below middle)
 ]
 DRONE_STROKE_EIGHTHS = 2      # eighths between successive plucks
-DRONE_CYCLE_EIGHTHS  = 8      # full cycle length (= 4 strokes × 2 eighths)
+DRONE_CYCLE_EIGHTHS  = 16     # full cycle length (3 strokes × dur_mult: 2+4+2 × 2 eighths each)
 DRONE_DECAY_TIME_S   = 0.6    # exponential decay time constant — string rings ~3× this
 
 # Tanpura harmonic profile: brighter and richer than the melody harmonics
@@ -400,6 +400,19 @@ def save_wav(array, path, target_lufs=TARGET_LUFS):
 
 # ── Stitch to MP4 ─────────────────────────────────────────────────────────────
 
+def wav_to_mp3(wav_path, mp3_path, bitrate='128k'):
+    """Convert a single wav to MP3 and remove the source wav."""
+    cmd = ['ffmpeg', '-y', '-i', wav_path, '-c:a', 'libmp3lame', '-b:a', bitrate, mp3_path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        warn(f"ffmpeg failed for {wav_path} (exit {result.returncode}):")
+        warn(result.stderr[-400:])
+    else:
+        os.remove(wav_path)
+        size_kb = os.path.getsize(mp3_path) / 1024
+        dbg_output(f"  → {mp3_path}  ({size_kb:.0f} KB)")
+
+
 def stitch_to_mp4(wav_paths, out_path):
     """
     Concatenate wav_paths into a single MP4 (AAC audio, no video) using ffmpeg.
@@ -468,24 +481,20 @@ def main():
     dbg_output(f"Synthesising {n_synth} sample(s)  timbre={timbre}  "
            f"beat={args.beat}s ({bpm:.0f} BPM)  outdir={args.outdir}")
 
-    wav_paths = []
+    mp3_paths = []
     for i in range(n_synth):
         info(f"Sample {i}/{n_synth} ...")
-        wav  = synthesise_sample(samples[i], timbre=timbre, eighth_duration=eighth_duration)
-        path = os.path.join(args.outdir, f"sample_{i:04d}.wav")
-        save_wav(wav, path)
-        wav_paths.append(path)
-
-        if i == 0:
-            debug_path = os.path.join(args.outdir, 'debug_sample.wav')
-            save_wav(wav.copy(), debug_path)
-            dbg_output(f"  Debug copy → {debug_path}")
+        wav      = synthesise_sample(samples[i], timbre=timbre, eighth_duration=eighth_duration)
+        wav_path = os.path.join(args.outdir, f"sample_{i:04d}.wav")
+        mp3_path = os.path.join(args.outdir, f"sample_{i:04d}.mp3")
+        save_wav(wav, wav_path)
+        wav_to_mp3(wav_path, mp3_path)
+        mp3_paths.append(mp3_path)
 
     dbg_output(f"Done. {n_synth} file(s) written to {args.outdir}/")
 
     if args.all:
-        mp4_path = os.path.join(args.outdir, 'all_samples.mp4')
-        stitch_to_mp4(wav_paths, mp4_path)
+        stitch_to_mp4(mp3_paths, os.path.join(args.outdir, 'all_samples.mp4'))
 
 
 if __name__ == "__main__":

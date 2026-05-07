@@ -87,6 +87,26 @@ def validate_sample(melody_raw, accent, note_boundary):
         warn("FAIL rule 9: melody_raw never changes across the sequence")
         ok = False
 
+    # Rule 10: reject excessive repetition of short melodic patterns
+    boundary_positions = np.where(note_boundary)[0]
+    notes = melody_raw[boundary_positions]
+    if len(notes) >= 4:
+        max_rep = 0.0
+        for pat_len in range(2, min(9, len(notes) // 2 + 1)):
+            for start in range(len(notes) - pat_len):
+                pattern = tuple(notes[start:start + pat_len])
+                count, pos = 0, 0
+                while pos <= len(notes) - pat_len:
+                    if tuple(notes[pos:pos + pat_len]) == pattern:
+                        count += 1
+                        pos += pat_len
+                    else:
+                        pos += 1
+                max_rep = max(max_rep, count * pat_len / len(notes))
+        if max_rep >= 0.5:
+            warn(f"FAIL rule 10: melodic repetition score {max_rep:.2f} exceeds 0.5")
+            ok = False
+
     return ok
 
 

@@ -88,13 +88,15 @@ else:
 # save accepted samples to generated.npz, print acceptance rate.
 
 from validate import validate_sample
+from tqdm import tqdm
 
 rnn.eval()
 accepted = []
 total    = args.num_samples
 seq_len  = args.seq_len
 
-for sample_idx in range(total):
+pbar = tqdm(range(total), desc="Generating")
+for sample_idx in pbar:
     melody_raws = []
     accents     = []
     boundaries  = []
@@ -142,6 +144,7 @@ for sample_idx in range(total):
         accepted.append((mr_arr, ac_arr, nb_arr))
     elif sample_idx < 5:
         print(f"Sample {sample_idx}: nb[0]={nb_arr[0]}, mr unique={np.unique(mr_arr)}, nb_rate={nb_arr.mean():.2f}")
+    pbar.set_postfix(accepted=f"{len(accepted)}/{sample_idx+1} ({100*len(accepted)//(sample_idx+1)}%)")
 
 dbg_output(f"Validation: {len(accepted)}/{total} accepted ({100*len(accepted)/total:.1f}%)")
 
