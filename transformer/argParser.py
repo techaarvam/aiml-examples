@@ -1,0 +1,29 @@
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Transformer Model Arguments')
+
+    parser.add_argument('--num_heads', type=int, default=8, help='Number of attention heads')
+    parser.add_argument('--num_layers', type=int, default=6, help='Number of transformer layers')
+    parser.add_argument('--window_size', type=int, default=100, help='Window size for input sequences')
+    parser.add_argument('--batch_size', type=int, default=32, help='Training batch size')
+    parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'], help='Optimizer type')
+    parser.add_argument('--data_dir', type=str, default='./data', help='Directory containing training data')
+    parser.add_argument('--save_model', type=str, default='transformer_model.pth', help='Path to save trained model')
+    parser.add_argument('--use_custom_norm', action='store_true', default=False, help='Use custom mean/std norm instead of nn.LayerNorm')
+    parser.add_argument('--verbosity', type=int, default=1, help='Debug verbosity level (1=output, 2=error, 3=warn, 4=debug, 5=info)')
+    parser.add_argument('--output_type', type=str, default='vecs', choices=['indices', 'vecs'], help='Output type: indices (linear projection to vocab, crossentropy loss) or vecs (linear projection to vecDims-1, MSE loss)')
+    parser.add_argument('--input', type=str, default=None, help='Path to input text file (required for training)')
+    parser.add_argument('--vocab_file', type=str, default='vocab.json', help='Path to save/load vocabulary JSON')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    parser.add_argument('--model_file', type=str, default=None, help='Path to load a saved model')
+    parser.add_argument('--output_size', type=int, default=50, help='Number of tokens to generate during inference')
+    parser.add_argument('--float_type', type=str, default='float32', choices=['float32', 'float16', 'bfloat16', 'float8'], help='Float precision type for model weights and computation')
+    parser.add_argument('--lr_schedule', type=str, default='none', choices=['none', 'plateau', 'cosine'], help='LR scheduler: none, plateau (reduce on stall), cosine (anneal over epochs)')
+    parser.add_argument('--infer_window_size', type=int, default=None, help='Context window size at inference time (defaults to window_size if not set)')
+    parser.add_argument('--quantize', action='store_true', default=False, help='Quantize ONNX model to INT8 after export (pth2onnx only)')
+    return parser.parse_args()
+
+args = parse_args()

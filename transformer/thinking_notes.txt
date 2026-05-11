@@ -1,0 +1,5 @@
+
+Raw-notes:
+    The glove has a 100 dimensional token 
+    position data for a window_size (context length) of say 4096 will need 1 extra position information.
+    101 can be the input dim

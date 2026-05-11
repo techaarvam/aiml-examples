@@ -1,0 +1,72 @@
+
+# --------------------------------------------------
+# Tech Aarvam
+# Copyright (c) 2026 Tech Aarvam.
+# Author: Ram (Ramasubramanian B)
+# --------------------------------------------------
+# Converts a saved .pth checkpoint to ONNX format.
+# Usage:
+#   python pth2onnx.py --model_file transformer_model.pth \
+#                      --vocab_file vocab.json --num_heads 8 --num_layers 3 \
+#                      --window_size 64 --output_type indices
+#   Add --quantize to also produce an INT8 quantized version
+# --------------------------------------------------
+
+import os
+import torch
+import DataInput
+import common
+import multihead
+from argParser import *
+from debug import *
+
+set_verbosity(args.verbosity)
+
+if not args.model_file:
+    raise ValueError("--model_file is required for pth2onnx conversion")
+
+output_path = args.output if hasattr(args, 'output') and args.output else args.model_file.replace('.pth', '.onnx').replace('.pt', '.onnx')
+
+common.dtype = {'float32': torch.float32, 'float16': torch.float16,
+                'bfloat16': torch.bfloat16, 'float8': torch.float8_e4m3fn}[args.float_type]
+
+dIn = DataInput.DataInput()
+
+transformer = multihead.MultiHead().to(common.device)
+transformer.load_state_dict(torch.load(args.model_file, map_location=common.device), strict=False)
+transformer = transformer.to(common.dtype)
+transformer.eval()
+
+dbg_output(f"Loaded model from {args.model_file}")
+
+# dummy input: batch=1, seq_len=window_size-1, vecDims (with position appended)
+dummy = torch.randn(1, args.window_size - 1, common.vecDims, dtype=common.dtype, device=common.device)
+
+torch.onnx.export(
+    transformer,
+    dummy,
+    output_path,
+    input_names=["input"],
+    output_names=["logits"],
+    dynamic_axes={
+        "input":  {0: "batch_size", 1: "seq_len"},
+        "logits": {0: "batch_size", 1: "seq_len"},
+    },
+    opset_version=17,
+)
+
+dbg_output(f"ONNX model saved to {output_path}")
+dbg_output(f"Input shape:  [batch, seq_len, {common.vecDims}]")
+dbg_output(f"Output shape: [batch, seq_len, {common.vocabSize}]")
+dbg_output(f"Size: {os.path.getsize(output_path) / 1024 / 1024:.1f} MB")
+
+if args.quantize:
+    from onnxruntime.quantization import quantize_dynamic, QuantType
+    quant_path = output_path.replace('.onnx', '_int8.onnx')
+    quantize_dynamic(
+        model_input=output_path,
+        model_output=quant_path,
+        weight_type=QuantType.QInt8,
+    )
+    dbg_output(f"INT8 quantized model saved to {quant_path}")
+    dbg_output(f"Size: {os.path.getsize(quant_path) / 1024 / 1024:.1f} MB")
