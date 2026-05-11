@@ -24,6 +24,10 @@ def parse_args():
     parser.add_argument('--lr_schedule', type=str, default='none', choices=['none', 'plateau', 'cosine'], help='LR scheduler: none, plateau (reduce on stall), cosine (anneal over epochs)')
     parser.add_argument('--infer_window_size', type=int, default=None, help='Context window size at inference time (defaults to window_size if not set)')
     parser.add_argument('--quantize', action='store_true', default=False, help='Quantize ONNX model to INT8 after export (pth2onnx only)')
+    parser.add_argument('--vecDims', type=int, default=128, help='Word vector / embedding dimensions. default=128')
+    parser.add_argument('--embedding_type', type=str, default='learned', choices=['glove-fixed', 'learned'], help='Embedding type: glove-fixed (pre-trained GloVe, frozen) or learned (random init, trained end-to-end)')
+    parser.add_argument('--max_vocab_size', type=int, default=30000, help='Cap vocabulary to top-N most frequent words (0=unlimited)')
+    parser.add_argument('--output', type=str, default=None, help='Output path for pth2onnx conversion (defaults to model_file with .onnx extension)')
     return parser.parse_args()
 
 args = parse_args()

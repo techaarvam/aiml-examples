@@ -4,6 +4,7 @@
 # Author: Ram (Ramasubramanian B)
 # --------------------------------------------------
 from nltk.tokenize import word_tokenize
+from collections import Counter
 import gensim.downloader as api
 from argParser import *
 from debug import *
@@ -14,18 +15,34 @@ import common
 class DataInput():
 
     def __init__(self):
-        self.wordVecs = api.load("glove-wiki-gigaword-100")
-        common.wordVecs = self.wordVecs
+        if (args.embedding_type == "glove-fixed"):
+            self.wordVecs = api.load("glove-wiki-gigaword-100")
+            common.wordVecs = self.wordVecs
 
-        self.vecDims = self.wordVecs.vector_size
-        common.vecDims = self.vecDims + 1 # The plus 1 for the position embedding
-        dbg_output (f"Dimension of the vector space is: {self.vecDims} ")
+            self.vecDims = self.wordVecs.vector_size
+            common.vecDims = self.vecDims  # positional encoding added inside model
+        else: 
+            self.vecDims = args.vecDims
+            common.vecDims = args.vecDims
+            
+            # Keep the vector mapping null if embedding 
+            # is learned as part of training. i.e not embedding_type != glove-fixed 
+            self.wordVecs = {}
+            common.wordVecs = {}
+
+        dbg_output (f"Dimension of the word vector space is: {self.vecDims} ")
 
         if args.input:
             # training mode: build vocab from text file
             f = open(args.input, "r")
             text = f.read()
             tokens = word_tokenize(text.lower())
+
+            if args.max_vocab_size > 0:
+                freq = Counter(tokens)
+                top_words = {w for w, _ in freq.most_common(args.max_vocab_size - 1)}
+                tokens = [w if w in top_words else '<unk>' for w in tokens]
+                dbg_output(f"Vocabulary capped at {args.max_vocab_size} (original unique tokens: {len(freq)})")
 
             self.vocab = sorted(set(tokens))
             self.wordDict = {w: i for i, w in enumerate(self.vocab)}
@@ -34,8 +51,12 @@ class DataInput():
             common.wordDict = self.wordDict
             dbg_output(f"Vocabulary size: {self.vocabSize}")
 
-            self.vectors, self.indices = self.tokensToVecsAndIndices(tokens)
+            self.vectors = None
+            self.indices = torch.tensor(
+                [self.wordDict.get(t, 0) for t in tokens], dtype=torch.long)
+
             self.save_vocab(args.vocab_file)
+
         elif args.vocab_file:
             # inference mode: load vocab from saved JSON
             self._load_vocab(args.vocab_file)
@@ -61,13 +82,16 @@ class DataInput():
     def tokensToVecsAndIndices (self, tokens):
         outVecs = []
         indices = []
+        # If embedding-type is not glove-fixed self.wordVecs is empty and this 
+        # code does not need a change and automatically the outVecs will be empty too. 
         for token in tokens:
             if token in self.wordVecs :
                 outVecs.append ( self.wordVecs[token] )
-            else: outVecs.append ( np.zeros(common.vecDims-1) )
+            else: outVecs.append ( np.zeros(common.vecDims) )
             indices.append(self.wordDict.get(token, 0))
 
         return  ( torch.tensor(np.array(outVecs), dtype = torch.float32) , torch.tensor ( indices, dtype = torch.long))
+        
 
 
     def vecsToTokens (self, vecs):
@@ -89,18 +113,20 @@ class DataInput():
         return torch.cat ((vecs, position_data), dim=1)
 
     def __len__(self):
-        return len(self.vectors) - args.window_size
+        return len(self.indices) - args.window_size
 
     def __getitem__(self, index):
-        #window_size-1 inputs
-        #window_size-1 outputs
-        
-        data =  self.vectors[index: index+args.window_size ]
-        data = self.embedPositions ( data )
-       
+        input_indices  = self.indices[index : index + args.window_size - 1]
         target_indices = self.indices[index+1 : index + args.window_size]
-        # [:-1] and [1:] suffice, but addingexplicitly 
-        return (data[:args.window_size-1] ,data[1:args.window_size], target_indices)
+
+        if args.embedding_type == "glove-fixed":
+            tokens_slice = [self.vocab[i.item()] for i in input_indices]
+            vecs = [self.wordVecs[t] if t in self.wordVecs else np.zeros(common.vecDims)
+                    for t in tokens_slice]
+            data = torch.tensor(np.array(vecs), dtype=torch.float32)
+            return (data, data, target_indices)
+        else:
+            return (input_indices, target_indices, target_indices)
 
     def getInputSize(self):
         return self.vecDims+1

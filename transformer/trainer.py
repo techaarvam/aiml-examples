@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from nltk.tokenize import word_tokenize
 import random
 from debug import *
+from tqdm import tqdm
 
 set_seed(args.seed)
 set_verbosity (args.verbosity)
@@ -53,7 +54,7 @@ else:
         optimizer = torch.optim.SGD(params = transformer.parameters(), lr = args.lr)
 
     if args.lr_schedule == 'plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5, threshold=1e-3)
     elif args.lr_schedule == 'cosine':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
     else:
@@ -66,12 +67,20 @@ else:
         total_loss = 0.0
         num_batches = 0
 
-        for inputs, labels, targetIndices in train_loader:
-            dInputs, dLabels, dTargetIndices = (inputs.to(common.device).to(common.dtype),
-                                               labels.to(common.device).to(common.dtype),
-                                               targetIndices.to(common.device))
-            optimizer.zero_grad()
+        
+        for arg1, arg2, arg3 in tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch"):
+            if args.embedding_type == "glove-fixed":
+                # arg1=inputs (float vecs), arg2=labels (float vecs), arg3=targetIndices (long)
+                dInputs       = arg1.to(common.device).to(common.dtype)
+                dLabels       = arg2.to(common.device).to(common.dtype)
+                dTargetIndices = arg3.to(common.device)
+            else:
+                # arg1=inputIndices (long), arg2/arg3=targetIndices (long)
+                dInputs       = arg1.to(common.device)   # long indices, no float cast
+                dLabels       = None
+                dTargetIndices = arg3.to(common.device)
 
+            optimizer.zero_grad()
             output = transformer.forward(dInputs)
 
             if (args.output_type == "indices"):
@@ -110,17 +119,25 @@ while True:
     inputTokens = word_tokenize (userInput.lower())
 
     inputTokens = inputTokens[:infer_ctx-1]
-    inputVecs, _ = dIn.tokensToVecsAndIndices (inputTokens)
+    inputVecs, inputIndices = dIn.tokensToVecsAndIndices(inputTokens)
 
     pad_len = (infer_ctx-1) - len(inputTokens)
-    if (pad_len >0):
-        padding = torch.zeros(pad_len, inputVecs.shape[1])
-        inputVecs = torch.cat((padding, inputVecs), dim=0)
+    if args.embedding_type == "glove-fixed":
+        if pad_len > 0:
+            padding = torch.zeros(pad_len, inputVecs.shape[1])
+            inputVecs = torch.cat((padding, inputVecs), dim=0)
+    else:
+        if pad_len > 0:
+            padding = torch.zeros(pad_len, dtype=torch.long)
+            inputIndices = torch.cat((padding, inputIndices), dim=0)
 
     generated = list(inputTokens)
     with torch.no_grad():
         for _ in range(args.output_size):
-            infInputs = dIn.embedPositions(inputVecs, seq_len=infer_ctx).unsqueeze(0).to(common.device).to(common.dtype)
+            if args.embedding_type == "glove-fixed":
+                infInputs = inputVecs.unsqueeze(0).to(common.device).to(common.dtype)
+            else:
+                infInputs = inputIndices.unsqueeze(0).to(common.device)
 
             infOutputs = transformer.forward(infInputs)
 
@@ -128,8 +145,11 @@ while True:
             nextWord = dIn.indicesToTokens([nextIdx])[0]
             generated.append(nextWord)
 
-            # slide window: drop oldest token, append new word's vector
-            newVec, _ = dIn.tokensToVecsAndIndices([nextWord])
-            inputVecs = torch.cat((inputVecs[1:], newVec), dim=0)
+            if args.embedding_type == "glove-fixed":
+                newVec, _ = dIn.tokensToVecsAndIndices([nextWord])
+                inputVecs = torch.cat((inputVecs[1:], newVec), dim=0)
+            else:
+                newIdx = torch.tensor([nextIdx], dtype=torch.long)
+                inputIndices = torch.cat((inputIndices[1:], newIdx))
 
     print(" ".join(generated))

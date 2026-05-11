@@ -12,15 +12,20 @@ class MultiHead (nn.Module):
         super().__init__()
 
         vecDims = common.vecDims
-        usedVocabVecs = []
-        for w in common.wordDict.keys():
-            if w in common.wordVecs:
-                usedVocabVecs.append( common.wordVecs[w] )
-            else: usedVocabVecs.append ( np.zeros(vecDims-1) )
+        isGlove = args.embedding_type == "glove-fixed"
 
-        self.register_buffer('wv', torch.tensor(np.array(usedVocabVecs), dtype = torch.float32))
-        self.embedding = nn.Embedding( vocabSize, vecDims ) 
-        self.embedding.weight.data.copy_(self.wv)
+        if isGlove:
+            usedVocabVecs = []
+            for w in common.wordDict.keys():
+                if w in common.wordVecs:
+                    usedVocabVecs.append( common.wordVecs[w] )
+                else: usedVocabVecs.append( np.zeros(vecDims) )
+            self.register_buffer('wv', torch.tensor(np.array(usedVocabVecs), dtype=torch.float32))
+        else:
+            self.embedding = nn.Embedding(common.vocabSize, vecDims)
+
+        # positional embedding used by both modes
+        self.posEmbedding = nn.Embedding(args.window_size, vecDims)
 
         self.attentionHeads = nn.ModuleList([ Attention() for _ in range (0, args.num_layers) ])
         # Shape Notes:
@@ -54,7 +59,13 @@ class MultiHead (nn.Module):
          # X is batch_size, window_size, vecDim
          # its expanded to include num_heads
 
+        positions = torch.arange(X.shape[1], device=X.device)
+        if args.embedding_type == "glove-fixed":
+            X = X + self.posEmbedding(positions)          # X is float GloVe vecs
+        else:
+            X = self.embedding(X) + self.posEmbedding(positions)  # X is long indices
         residual = X
+        
         for layer in range (0, args.num_layers):
             # batch_size dim in expand is kept as -1 mindful of the last batch which may not be batch_size.
             attentionOutput = X.unsqueeze(1).expand(-1, args.num_heads, -1, common.vecDims) 

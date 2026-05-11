@@ -39,8 +39,10 @@ transformer.eval()
 
 dbg_output(f"Loaded model from {args.model_file}")
 
-# dummy input: batch=1, seq_len=window_size-1, vecDims (with position appended)
-dummy = torch.randn(1, args.window_size - 1, common.vecDims, dtype=common.dtype, device=common.device)
+if args.embedding_type == "glove-fixed":
+    dummy = torch.randn(1, args.window_size - 1, common.vecDims, dtype=common.dtype, device=common.device)
+else:
+    dummy = torch.zeros(1, args.window_size - 1, dtype=torch.long, device=common.device)
 
 torch.onnx.export(
     transformer,
@@ -56,8 +58,11 @@ torch.onnx.export(
 )
 
 dbg_output(f"ONNX model saved to {output_path}")
-dbg_output(f"Input shape:  [batch, seq_len, {common.vecDims}]")
-dbg_output(f"Output shape: [batch, seq_len, {common.vocabSize}]")
+if args.embedding_type == "glove-fixed":
+    dbg_output(f"Input shape:  [batch, seq_len={args.window_size-1}, vecDims={common.vecDims}] (float)")
+else:
+    dbg_output(f"Input shape:  [batch, seq_len={args.window_size-1}] (long indices)")
+dbg_output(f"Output shape: [batch, seq_len={args.window_size-1}, vocab={common.vocabSize}]")
 dbg_output(f"Size: {os.path.getsize(output_path) / 1024 / 1024:.1f} MB")
 
 if args.quantize:
