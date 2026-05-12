@@ -45,6 +45,8 @@ class DataInput():
                 common.wordDict  = self.wordDict
                 self.vectors = None
                 dbg_output(f"Loaded cache from {args.cache_file} ({self.vocabSize} words, {len(self.indices):,} tokens)")
+                if args.vocab_file:
+                    self.save_vocab(args.vocab_file)
             else:
                 # training mode: tokenize text, then build or reuse vocab
                 f = open(args.input, "r")

@@ -5,6 +5,8 @@
 # Author: Ram (Ramasubramanian B)
 # --------------------------------------------------
 import sys
+import os
+import time
 import DataInput
 import torch
 import numpy as np
@@ -75,15 +77,18 @@ if not args.model_file or args.resume:
     else:
         scheduler = None
 
-    interactive   = sys.stdout.isatty()
-    train_loader  = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
-    total_batches = len(train_loader)
+    interactive    = sys.stdout.isatty()
+    train_loader   = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+    total_batches  = len(train_loader)
     heartbeat_every = max(1, total_batches // 10)
+    progress_file  = os.path.join(os.path.dirname(args.save_model), "progress.txt") \
+                     if args.save_model else None
 
     for i in range(start_epoch, args.epochs):
         dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
-        total_loss = 0.0
+        total_loss  = 0.0
         num_batches = 0
+        epoch_start = time.time()
 
         loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
                       if interactive else train_loader
@@ -109,11 +114,28 @@ if not args.model_file or args.resume:
             loss.backward()
             optimizer.step()
 
-            total_loss += loss.item()
+            total_loss  += loss.item()
             num_batches += 1
 
-            if not interactive and num_batches % heartbeat_every == 0:
-                dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+            if num_batches % heartbeat_every == 0:
+                elapsed   = time.time() - epoch_start
+                rate      = num_batches / elapsed
+                remaining = (total_batches - num_batches) / rate
+                lr_cur    = optimizer.param_groups[0]['lr']
+                if not interactive:
+                    dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+                if progress_file:
+                    with open(progress_file, 'w') as pf:
+                        pf.write(
+                            f"Epoch    : {i+1} / {args.epochs}\n"
+                            f"Batch    : {num_batches} / {total_batches}  ({100*num_batches/total_batches:.1f}%)\n"
+                            f"Loss     : {total_loss/num_batches:.4f}\n"
+                            f"LR       : {lr_cur:.6f}\n"
+                            f"Rate     : {rate:.1f} batches/sec\n"
+                            f"Elapsed  : {elapsed/60:.1f} min\n"
+                            f"ETA epoch: {remaining/60:.1f} min\n"
+                            f"Updated  : {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        )
 
         dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
         if scheduler:

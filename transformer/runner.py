@@ -150,6 +150,9 @@ write_sh(os.path.join(run_dir, "cmd_webserver.sh"),
     f"echo 'Serving at http://0.0.0.0:9090/web_infer.html'\n"
     f"python -m http.server 9090")
 
+write_sh(os.path.join(run_dir, "cmd_monitor.sh"),
+    f"watch -n 2 cat {os.path.join(run_dir, 'progress.txt')}")
+
 # ── Copy + patch web_infer.html ───────────────────
 src_html = os.path.join(HERE, "web_infer.html")
 if os.path.exists(src_html):
