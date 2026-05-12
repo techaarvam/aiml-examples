@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--resume', action='store_true', default=False, help='Resume training from --model_file checkpoint')
     parser.add_argument('--start_epoch', type=int, default=None, help='Manually override starting epoch when resuming (1-based). Required for old-format checkpoints.')
     parser.add_argument('--run_dir', type=str, default=None, help='Output directory for this run (default: runs/YYYYMMDD_HHMMSS). Set by runner.py.')
+    parser.add_argument('--cache_file', type=str, default=None, help='Path to pickle cache of tokenized indices+vocab (skips word_tokenize on subsequent runs)')
     return parser.parse_args()
 
 args = parse_args()
