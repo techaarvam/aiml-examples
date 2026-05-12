@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Transformer LM — Tech Aarvam</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 32px 24px; max-width: 860px; margin: 0 auto; }
+  h1 { color: #4fc3f7; font-size: 1.3em; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 0.8em; margin-bottom: 24px; }
+  #model-status { font-size: 0.82em; color: #888; margin-bottom: 20px; padding: 8px 12px; background: #222; border-left: 3px solid #4fc3f7; }
+  label { font-size: 0.78em; color: #888; display: block; margin-bottom: 6px; }
+  textarea {
+    width: 100%; height: 90px; background: #252525; color: #e0e0e0;
+    border: 1px solid #3a3a3a; padding: 10px; font-family: monospace;
+    font-size: 13px; resize: vertical; outline: none;
+  }
+  textarea:focus { border-color: #4fc3f7; }
+  .controls { display: flex; gap: 16px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  button {
+    background: #4fc3f7; color: #000; border: none; padding: 8px 22px;
+    cursor: pointer; font-size: 13px; font-family: monospace; font-weight: bold;
+  }
+  button:disabled { background: #333; color: #555; cursor: not-allowed; }
+  button:hover:not(:disabled) { background: #81d4fa; }
+  .ctrl-group { display: flex; align-items: center; gap: 6px; font-size: 0.78em; color: #888; }
+  input[type=number] {
+    width: 64px; background: #252525; color: #e0e0e0;
+    border: 1px solid #3a3a3a; padding: 4px 6px; font-family: monospace; font-size: 13px;
+  }
+  #token-count { font-size: 0.75em; color: #555; }
+  #status { font-size: 0.78em; color: #666; margin-top: 10px; min-height: 18px; }
+  #output {
+    margin-top: 16px; padding: 14px; background: #252525;
+    border: 1px solid #3a3a3a; min-height: 120px; line-height: 1.8;
+    font-size: 13px; white-space: pre-wrap; overflow-y: auto; max-height: 400px;
+  }
+  .seed { color: #9e9e9e; }
+  .generated { color: #81c784; }
+  #progress { height: 2px; background: #333; margin-top: 10px; }
+  #progress-bar { height: 100%; background: #4fc3f7; width: 0%; transition: width 0.1s; }
+</style>
+</head>
+<body>
+
+<h1>Transformer Language Model</h1>
+<div class="subtitle">Tech Aarvam · 11M params · WikiText-103 · 30K vocab</div>
+
+<div id="model-status">Initialising...</div>
+
+<label>Seed text (up to 63 tokens) — grey text is your input, green is generated:</label>
+<textarea id="seed-input" placeholder="Enter seed text here..." disabled></textarea>
+
+<div class="controls">
+  <button id="generate-btn" disabled onclick="generate()">Generate</button>
+  <div class="ctrl-group">
+    Output tokens:
+    <input type="number" id="output-tokens" value="63" min="1" max="300">
+  </div>
+  <span id="token-count"></span>
+</div>
+
+<div id="status"></div>
+<div id="progress"><div id="progress-bar"></div></div>
+<div id="output"></div>
+
+<script>
+  let session = null;
+  let vocab = null;
+  let reverseVocab = null;
+  let vocabSize = 0;
+
+  // Approximate NLTK word_tokenize behaviour
+  function tokenize(text) {
+    text = text.toLowerCase();
+    text = text.replace(/n't/g, " n't");
+    text = text.replace(/'s\b/g, " 's");
+    text = text.replace(/'re\b/g, " 're");
+    text = text.replace(/'ve\b/g, " 've");
+    text = text.replace(/'ll\b/g, " 'll");
+    text = text.replace(/'d\b/g, " 'd");
+    text = text.replace(/'m\b/g, " 'm");
+    text = text.replace(/``/g, ' `` ');
+    text = text.replace(/''/g, " '' ");
+    text = text.replace(/([.,!?;:()\[\]{}"'])/g, ' $1 ');
+    return text.split(/\s+/).filter(t => t.length > 0);
+  }
+
+  document.getElementById('seed-input').addEventListener('input', function () {
+    const n = Math.min(tokenize(this.value).length, 63);
+    document.getElementById('token-count').textContent = `${n}/63 tokens`;
+  });
+
+  async function init() {
+    const statusEl = document.getElementById('model-status');
+    try {
+      ort.env.wasm.numThreads = 1;
+
+      statusEl.textContent = 'Loading vocabulary (vocab.json)...';
+      const vocabResp = await fetch('vocab.json');
+      if (!vocabResp.ok) throw new Error('vocab.json not found — run the web server from the transformer directory');
+      vocab = await vocabResp.json();
+      vocabSize = Object.keys(vocab).length;
+      reverseVocab = Object.fromEntries(Object.entries(vocab).map(([w, i]) => [i, w]));
+
+      statusEl.textContent = `Vocabulary loaded (${vocabSize.toLocaleString()} words). Loading ONNX model (~42 MB)...`;
+      session = await ort.InferenceSession.create('transformer_model.onnx', {
+        executionProviders: ['wasm']
+      });
+
+      statusEl.textContent = `Ready — vocab: ${vocabSize.toLocaleString()} · input: [1,63] int64 · output: [1,63,${vocabSize.toLocaleString()}]`;
+      document.getElementById('seed-input').disabled = false;
+      document.getElementById('generate-btn').disabled = false;
+
+    } catch (e) {
+      statusEl.style.borderColor = '#e57373';
+      statusEl.textContent = `Error: ${e.message}`;
+      console.error(e);
+    }
+  }
+
+  async function generate() {
+    const seedText = document.getElementById('seed-input').value.trim();
+    if (!seedText) return;
+
+    const outputTokens = parseInt(document.getElementById('output-tokens').value) || 63;
+    const btn = document.getElementById('generate-btn');
+    const statusEl = document.getElementById('status');
+    const outputDiv = document.getElementById('output');
+    const progressBar = document.getElementById('progress-bar');
+
+    btn.disabled = true;
+    progressBar.style.width = '0%';
+
+    const tokens = tokenize(seedText).slice(0, 63);
+    const seqLen = 63;
+
+    // Left-pad with 0 (unk) so seed tokens are right-aligned
+    let inputIds = new Array(seqLen).fill(0);
+    const offset = seqLen - tokens.length;
+    for (let i = 0; i < tokens.length; i++) {
+      inputIds[offset + i] = vocab[tokens[i]] !== undefined ? vocab[tokens[i]] : 0;
+    }
+
+    const generated = [];
+    outputDiv.innerHTML = `<span class="seed">${tokens.join(' ')}</span> `;
+
+    for (let step = 0; step < outputTokens; step++) {
+      statusEl.textContent = `Generating token ${step + 1} / ${outputTokens}`;
+      progressBar.style.width = `${((step + 1) / outputTokens * 100).toFixed(1)}%`;
+
+      // Yield to browser to repaint
+      await new Promise(r => setTimeout(r, 0));
+
+      const inputTensor = new ort.Tensor(
+        'int64',
+        BigInt64Array.from(inputIds.map(BigInt)),
+        [1, seqLen]
+      );
+
+      const results = await session.run({ input: inputTensor });
+      const logits = results.logits.data; // Float32Array [1 * 63 * vocabSize]
+
+      // Argmax over last token position
+      const base = (seqLen - 1) * vocabSize;
+      let maxIdx = 0, maxVal = logits[base];
+      for (let i = 1; i < vocabSize; i++) {
+        if (logits[base + i] > maxVal) { maxVal = logits[base + i]; maxIdx = i; }
+      }
+
+      const nextWord = reverseVocab[maxIdx] || '<unk>';
+      generated.push(nextWord);
+
+      outputDiv.innerHTML =
+        `<span class="seed">${tokens.join(' ')}</span> <span class="generated">${generated.join(' ')}</span>`;
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+
+      // Slide window
+      inputIds = [...inputIds.slice(1), maxIdx];
+    }
+
+    statusEl.textContent = `Done — ${outputTokens} tokens generated.`;
+    progressBar.style.width = '100%';
+    btn.disabled = false;
+  }
+
+  init();
+</script>
+</body>
+</html>

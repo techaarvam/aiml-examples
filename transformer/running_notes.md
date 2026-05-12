@@ -10,6 +10,11 @@
 - LR: 0.0003 | Schedule: Plateau | Optimizer: Adam
 - Model Parameters: 11,062,832
 
+### Timing
+- ~1hr 28min per epoch (50,407 batches at 9.2 batch/s on RTX 5070)
+- vs Run 1: ~25 min/epoch — 3.5× slower despite only 1.8× more parameters
+- Slowdown mainly due to larger dataset (wikitext50m >> combined.txt) — more tokens = more batches per epoch
+
 ### Loss Log
 | Epoch | Loss | Notes |
 |-------|------|-------|
