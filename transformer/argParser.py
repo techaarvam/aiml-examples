@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument('--output', type=str, default=None, help='Output path for pth2onnx conversion (defaults to model_file with .onnx extension)')
     parser.add_argument('--resume', action='store_true', default=False, help='Resume training from --model_file checkpoint')
     parser.add_argument('--start_epoch', type=int, default=None, help='Manually override starting epoch when resuming (1-based). Required for old-format checkpoints.')
+    parser.add_argument('--run_dir', type=str, default=None, help='Output directory for this run (default: runs/YYYYMMDD_HHMMSS). Set by runner.py.')
     return parser.parse_args()
 
 args = parse_args()

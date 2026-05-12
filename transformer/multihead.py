@@ -32,7 +32,7 @@ class MultiHead (nn.Module):
            # Wo works with concatenated attention heads. reduces to VecDims
            # Wo is the learned re-combination weights, instead of a simple mean.
 
-        self.Wo = nn.ParameterList([nn.Parameter(torch.randn(common.vecDims * args.num_heads, common.vecDims) * (1.0 / (common.vecDims * args.num_heads) ** 0.5)) for _ in range(args.num_layers)])
+        self.Wo = nn.ParameterList([nn.Parameter(torch.randn(common.vecDims, common.vecDims) * (1.0 / (common.vecDims) ** 0.5)) for _ in range(args.num_layers)])
         if (args.use_custom_norm):
             self.learnedMeanShift = nn.ParameterList([nn.Parameter(torch.zeros(1,1,vecDims)) for _ in range(args.num_layers)])
             self.learnedStdScale  = nn.ParameterList([nn.Parameter(torch.ones(1,1,vecDims))  for _ in range(args.num_layers)])

@@ -17,10 +17,11 @@ class Attention(nn.Module):
           # TBD: Experiment with scaling factors/distributions later 
 
           # Note: keys, query, value are the W_k, W_q, W_v
-        scale = 1.0 / (common.vecDims ** 0.5)
-        self.keys  = nn.Parameter(torch.randn (args.num_heads, common.vecDims, common.vecDims) * scale)
-        self.query = nn.Parameter(torch.randn (args.num_heads, common.vecDims, common.vecDims) * scale)
-        self.value = nn.Parameter(torch.randn (args.num_heads, common.vecDims, common.vecDims) * scale)
+        head_dim = common.vecDims // args.num_heads
+        scale = 1.0 / (head_dim ** 0.5)
+        self.keys  = nn.Parameter(torch.randn (args.num_heads, common.vecDims, head_dim) * scale)
+        self.query = nn.Parameter(torch.randn (args.num_heads, common.vecDims, head_dim) * scale)
+        self.value = nn.Parameter(torch.randn (args.num_heads, common.vecDims, head_dim) * scale)
 
         mask = torch.triu(torch.ones(args.window_size-1, args.window_size-1), diagonal=1).bool()
         self.register_buffer('mask', mask)
@@ -49,7 +50,8 @@ class Attention(nn.Module):
         # Nuance: pytorch matches last two dimensions. 
           # batch_size, num_heads, window_size, window_size @ num_heads, window_size, vecDim works in pytorch, not in maths!
 
-        scores =  Q @ K.transpose(-2,-1) / (common.vecDims ** 0.5)
+        head_dim = self.keys.shape[-1]
+        scores =  Q @ K.transpose(-2,-1) / (head_dim ** 0.5)
         cur_len = scores.shape[-1]
         if cur_len == self.mask.shape[0]:
             scores.masked_fill_(self.mask, float('-inf'))

@@ -4,6 +4,7 @@
 # Copyright (c) 2026 Tech Aarvam.
 # Author: Ram (Ramasubramanian B)
 # --------------------------------------------------
+import sys
 import DataInput
 import torch
 import numpy as np
@@ -75,13 +76,18 @@ if not args.model_file or args.resume:
         scheduler = None
 
     train_loader = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+    interactive  = sys.stdout.isatty()
+    total_batches = len(train_loader)
+    heartbeat_every = max(1, total_batches // 10)  # ~10 log lines per epoch when piped
 
     for i in range(start_epoch, args.epochs):
         dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
         total_loss = 0.0
         num_batches = 0
 
-        for arg1, arg2, arg3 in tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch"):
+        loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
+                      if interactive else train_loader
+        for arg1, arg2, arg3 in loader_iter:
             if args.embedding_type == "glove-fixed":
                 dInputs        = arg1.to(common.device).to(common.dtype)
                 dLabels        = arg2.to(common.device).to(common.dtype)
@@ -105,6 +111,9 @@ if not args.model_file or args.resume:
             total_loss += loss.item()
             num_batches += 1
 
+            if not interactive and num_batches % heartbeat_every == 0:
+                dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+
         dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
         if scheduler:
             if args.lr_schedule == 'plateau':
@@ -117,6 +126,13 @@ if not args.model_file or args.resume:
 
 
 infer_ctx = args.infer_window_size if args.infer_window_size is not None else args.window_size
+
+# Run inference only in explicit inference mode (--model_file without --resume)
+# or when running interactively. Skip when piped (runner/log mode).
+inference_mode = (args.model_file and not args.resume)
+if not inference_mode and not sys.stdin.isatty():
+    dbg_output("Non-interactive mode — skipping inference prompt. Use cmd_infer.sh to run inference.")
+    sys.exit(0)
 
 while True:
     dbg_output (f"Enter the starting portion of the text to predict the next words (context={infer_ctx-1} tokens):")
