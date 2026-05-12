@@ -47,6 +47,21 @@ epochs         = 10
 lr             = 0.0003
 max_vocab_size = 10000
 
+# ── High: local RTX 5070 run on WikiText-103 ─────────
+# Purpose: meaningful local training — full wiki corpus, float16, ~2.8 hrs/epoch
+# Expected: ~4 nights (8 hrs/night) for 10 epochs
+[high]
+input          = "raw_data/wikitext103.txt"
+vecDims        = 128
+num_heads      = 8
+num_layers     = 8
+window_size    = 64
+batch_size     = 512
+epochs         = 100
+lr             = 0.0003
+float_type     = "float16"
+max_vocab_size = 50000
+
 # ── Server: full cloud run on WikiText-103 ─────────
 # Purpose: real training run on cloud GPU (A100 / 4090)
 [server]

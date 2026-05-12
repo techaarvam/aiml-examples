@@ -105,7 +105,8 @@ if not args.model_file or args.resume:
                     output = transformer.forward(dInputs)
 
                     if args.output_type == "indices":
-                        loss = loss_fn(output.permute(0,2,1), dTargetIndices)
+                        B, S, V = output.shape
+                        loss = loss_fn(output.reshape(B * S, V), dTargetIndices.reshape(B * S))
                     elif args.output_type == "vecs":
                         loss = loss_fn(output, dLabels[...,:-1])
 
