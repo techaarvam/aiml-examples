@@ -33,7 +33,12 @@ common.dtype = {'float32': torch.float32, 'float16': torch.float16,
 dIn = DataInput.DataInput()
 
 transformer = multihead.MultiHead().to(common.device)
-transformer.load_state_dict(torch.load(args.model_file, map_location=common.device), strict=False)
+checkpoint = torch.load(args.model_file, map_location=common.device)
+if isinstance(checkpoint, dict) and 'model' in checkpoint:
+    transformer.load_state_dict(checkpoint['model'])
+    dbg_output(f"Checkpoint epoch: {checkpoint.get('epoch', '?')}")
+else:
+    transformer.load_state_dict(checkpoint)
 transformer = transformer.to(common.dtype)
 transformer.eval()
 
@@ -51,10 +56,11 @@ torch.onnx.export(
     input_names=["input"],
     output_names=["logits"],
     dynamic_axes={
-        "input":  {0: "batch_size", 1: "seq_len"},
-        "logits": {0: "batch_size", 1: "seq_len"},
+        "input":  {0: "batch_size"},
+        "logits": {0: "batch_size"},
     },
     opset_version=17,
+    dynamo=False,
 )
 
 dbg_output(f"ONNX model saved to {output_path}")

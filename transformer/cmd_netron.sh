@@ -1,1 +1,1 @@
-python -m netron transformer_model.onnx
+python -c "import netron; netron.start('transformer_model.onnx')"

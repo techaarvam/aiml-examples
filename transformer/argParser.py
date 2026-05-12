@@ -28,6 +28,8 @@ def parse_args():
     parser.add_argument('--embedding_type', type=str, default='learned', choices=['glove-fixed', 'learned'], help='Embedding type: glove-fixed (pre-trained GloVe, frozen) or learned (random init, trained end-to-end)')
     parser.add_argument('--max_vocab_size', type=int, default=30000, help='Cap vocabulary to top-N most frequent words (0=unlimited)')
     parser.add_argument('--output', type=str, default=None, help='Output path for pth2onnx conversion (defaults to model_file with .onnx extension)')
+    parser.add_argument('--resume', action='store_true', default=False, help='Resume training from --model_file checkpoint')
+    parser.add_argument('--start_epoch', type=int, default=None, help='Manually override starting epoch when resuming (1-based). Required for old-format checkpoints.')
     return parser.parse_args()
 
 args = parse_args()

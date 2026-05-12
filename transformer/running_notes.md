@@ -1,5 +1,30 @@
 # Transformer Model Experiments - Running Notes
 
+## Run 2 — WikiText-103 (50MB), Learned Embedding (May 12, 2026)
+
+### Hyperparameters
+- Embedding: Learned (nn.Embedding, vecDims=128)
+- Data: raw_data/wikitext50m.txt (50MB slice of WikiText-103)
+- Vocabulary: 30,000 (capped from 148,535 unique tokens)
+- Layers: 6 | Heads: 8 | Window: 64 | Batch: 192
+- LR: 0.0003 | Schedule: Plateau | Optimizer: Adam
+- Model Parameters: 11,062,832
+
+### Loss Log
+| Epoch | Loss | Notes |
+|-------|------|-------|
+| 1 | 4.4123 | |
+| 2 | 3.9514 | |
+| 3 | 3.8389 | |
+| 4 | 3.7725 | |
+| 5 | 3.7239 | |
+| 6 | — | CUDA launch timeout (X11 watchdog, display on same GPU) |
+| 7+ | resumed | Resumed from epoch 5 checkpoint with --start_epoch 7 |
+
+---
+
+## Run 1 — combined.txt, GloVe Embedding
+
 ## Experiment Overview
 - **Date**: May 11, 2026
 - **Model**: Custom Transformer with Multi-Head Attention

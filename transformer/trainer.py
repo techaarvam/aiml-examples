@@ -32,26 +32,40 @@ total_params = sum(p.numel() for p in transformer.parameters())
 trainable_params = sum(p.numel() for p in transformer.parameters() if p.requires_grad)
 dbg_output(f"Model parameters: {total_params:,} total, {trainable_params:,} trainable")
 
-if args.model_file:
-    transformer.load_state_dict(torch.load(args.model_file, map_location=common.device))
-    transformer = transformer.to(common.dtype)
-    dbg_output(f"Loaded Model from {args.model_file}")
-else:
-    # Lets train!
-    #   choice of outputs:
-    #      index into the vocabulary (targetIndices) 
-    #      vector itself (only projected down from 101 -> 100 dims) 
-    # 
+start_epoch = 0
+checkpoint = None
 
+if args.model_file:
+    checkpoint = torch.load(args.model_file, map_location=common.device)
+    if isinstance(checkpoint, dict) and 'model' in checkpoint:
+        transformer.load_state_dict(checkpoint['model'])
+        transformer = transformer.to(common.dtype)
+        dbg_output(f"Loaded model from {args.model_file} (saved after epoch {checkpoint.get('epoch', '?')})")
+    else:
+        transformer.load_state_dict(checkpoint)
+        transformer = transformer.to(common.dtype)
+        checkpoint = None  # old format, no optimizer/epoch state
+        dbg_output(f"Loaded model from {args.model_file}")
+
+if not args.model_file or args.resume:
     if args.output_type == "indices":
         loss_fn = nn.CrossEntropyLoss()
-    else: 
+    else:
         loss_fn = nn.MSELoss()
 
-    if (args.optimizer == "adam"):
-        optimizer = torch.optim.Adam(params = transformer.parameters(), lr = args.lr)
+    if args.optimizer == "adam":
+        optimizer = torch.optim.Adam(params=transformer.parameters(), lr=args.lr)
     else:
-        optimizer = torch.optim.SGD(params = transformer.parameters(), lr = args.lr)
+        optimizer = torch.optim.SGD(params=transformer.parameters(), lr=args.lr)
+
+    if args.resume and checkpoint and 'optimizer' in checkpoint:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        start_epoch = checkpoint.get('epoch', 0)
+        dbg_output(f"Resuming from epoch {start_epoch + 1}")
+
+    if args.start_epoch is not None:
+        start_epoch = args.start_epoch - 1
+        dbg_output(f"Starting epoch overridden to {args.start_epoch}")
 
     if args.lr_schedule == 'plateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5, threshold=1e-3)
@@ -60,54 +74,46 @@ else:
     else:
         scheduler = None
 
-    train_loader = DataLoader(dIn, batch_size = args.batch_size, shuffle=True)
+    train_loader = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
 
-    for i in range(0, args.epochs):
+    for i in range(start_epoch, args.epochs):
         dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
         total_loss = 0.0
         num_batches = 0
 
-        
         for arg1, arg2, arg3 in tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch"):
             if args.embedding_type == "glove-fixed":
-                # arg1=inputs (float vecs), arg2=labels (float vecs), arg3=targetIndices (long)
-                dInputs       = arg1.to(common.device).to(common.dtype)
-                dLabels       = arg2.to(common.device).to(common.dtype)
+                dInputs        = arg1.to(common.device).to(common.dtype)
+                dLabels        = arg2.to(common.device).to(common.dtype)
                 dTargetIndices = arg3.to(common.device)
             else:
-                # arg1=inputIndices (long), arg2/arg3=targetIndices (long)
-                dInputs       = arg1.to(common.device)   # long indices, no float cast
-                dLabels       = None
+                dInputs        = arg1.to(common.device)
+                dLabels        = None
                 dTargetIndices = arg3.to(common.device)
 
             optimizer.zero_grad()
             output = transformer.forward(dInputs)
 
-            if (args.output_type == "indices"):
-                # CrossEntropy expect maths style row-vector (for the last 2 dims), so permuting labels 1,2
+            if args.output_type == "indices":
                 loss = loss_fn(output.permute(0,2,1), dTargetIndices)
-            elif (args.output_type == "vecs"):
-                loss = loss_fn (output, dLabels[...,:-1])
+            elif args.output_type == "vecs":
+                loss = loss_fn(output, dLabels[...,:-1])
 
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
-            num_batches = num_batches + 1
- 
-        dbg_output (f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
+            num_batches += 1
+
+        dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
         if scheduler:
             if args.lr_schedule == 'plateau':
                 scheduler.step(total_loss/num_batches)
             else:
                 scheduler.step()
             dbg_output(f" LR={optimizer.param_groups[0]['lr']:.6f}")
-        torch.save(transformer.state_dict(), args.save_model)
-        dbg_output (f"Checkpoint saved to {args.save_model}")
-
-    if (args.save_model):
-        torch.save(transformer.state_dict(), args.save_model)
-        dbg_output (f"Model saved to {args.save_model}")
+        torch.save({'model': transformer.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': i+1}, args.save_model)
+        dbg_output(f"Checkpoint saved to {args.save_model}")
 
 
 infer_ctx = args.infer_window_size if args.infer_window_size is not None else args.window_size
