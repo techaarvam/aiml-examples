@@ -117,25 +117,25 @@ if not args.model_file or args.resume:
             total_loss  += loss.item()
             num_batches += 1
 
-            if num_batches % heartbeat_every == 0:
+            if not interactive and num_batches % heartbeat_every == 0:
+                dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+
+            if progress_file:
                 elapsed   = time.time() - epoch_start
                 rate      = num_batches / elapsed
                 remaining = (total_batches - num_batches) / rate
                 lr_cur    = optimizer.param_groups[0]['lr']
-                if not interactive:
-                    dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
-                if progress_file:
-                    with open(progress_file, 'w') as pf:
-                        pf.write(
-                            f"Epoch    : {i+1} / {args.epochs}\n"
-                            f"Batch    : {num_batches} / {total_batches}  ({100*num_batches/total_batches:.1f}%)\n"
-                            f"Loss     : {total_loss/num_batches:.4f}\n"
-                            f"LR       : {lr_cur:.6f}\n"
-                            f"Rate     : {rate:.1f} batches/sec\n"
-                            f"Elapsed  : {elapsed/60:.1f} min\n"
-                            f"ETA epoch: {remaining/60:.1f} min\n"
-                            f"Updated  : {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        )
+                with open(progress_file, 'w') as pf:
+                    pf.write(
+                        f"Epoch    : {i+1} / {args.epochs}\n"
+                        f"Batch    : {num_batches} / {total_batches}  ({100*num_batches/total_batches:.1f}%)\n"
+                        f"Loss     : {total_loss/num_batches:.4f}\n"
+                        f"LR       : {lr_cur:.6f}\n"
+                        f"Rate     : {rate:.1f} batches/sec\n"
+                        f"Elapsed  : {elapsed/60:.1f} min\n"
+                        f"ETA epoch: {remaining/60:.1f} min\n"
+                        f"Updated  : {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    )
 
         dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
         if scheduler:
