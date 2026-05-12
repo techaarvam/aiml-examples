@@ -11,6 +11,7 @@ from debug import *
 import numpy as np
 import torch
 import common
+import os
 
 class DataInput():
 
@@ -33,29 +34,33 @@ class DataInput():
         dbg_output (f"Dimension of the word vector space is: {self.vecDims} ")
 
         if args.input:
-            # training mode: build vocab from text file
+            # training mode: tokenize text, then build or reuse vocab
             f = open(args.input, "r")
             text = f.read()
             tokens = word_tokenize(text.lower())
 
-            if args.max_vocab_size > 0:
-                freq = Counter(tokens)
-                top_words = {w for w, _ in freq.most_common(args.max_vocab_size - 1)}
-                tokens = [w if w in top_words else '<unk>' for w in tokens]
-                dbg_output(f"Vocabulary capped at {args.max_vocab_size} (original unique tokens: {len(freq)})")
+            if args.vocab_file and os.path.exists(args.vocab_file):
+                self._load_vocab(args.vocab_file)
+                tokens = [t if t in self.wordDict else '<unk>' for t in tokens]
+                dbg_output(f"Re-using vocabulary from {args.vocab_file} ({self.vocabSize} words)")
+            else:
+                if args.max_vocab_size > 0:
+                    freq = Counter(tokens)
+                    top_words = {w for w, _ in freq.most_common(args.max_vocab_size - 1)}
+                    tokens = [w if w in top_words else '<unk>' for w in tokens]
+                    dbg_output(f"Vocabulary capped at {args.max_vocab_size} (original unique tokens: {len(freq)})")
 
-            self.vocab = sorted(set(tokens))
-            self.wordDict = {w: i for i, w in enumerate(self.vocab)}
-            self.vocabSize = len(self.vocab)
-            common.vocabSize = self.vocabSize
-            common.wordDict = self.wordDict
-            dbg_output(f"Vocabulary size: {self.vocabSize}")
+                self.vocab = sorted(set(tokens))
+                self.wordDict = {w: i for i, w in enumerate(self.vocab)}
+                self.vocabSize = len(self.vocab)
+                common.vocabSize = self.vocabSize
+                common.wordDict = self.wordDict
+                dbg_output(f"Vocabulary size: {self.vocabSize}")
+                self.save_vocab(args.vocab_file)
 
             self.vectors = None
             self.indices = torch.tensor(
                 [self.wordDict.get(t, 0) for t in tokens], dtype=torch.long)
-
-            self.save_vocab(args.vocab_file)
 
         elif args.vocab_file:
             # inference mode: load vocab from saved JSON
