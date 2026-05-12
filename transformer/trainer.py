@@ -75,44 +75,58 @@ if not args.model_file or args.resume:
     else:
         scheduler = None
 
-    train_loader = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
-    interactive  = sys.stdout.isatty()
-    total_batches = len(train_loader)
-    heartbeat_every = max(1, total_batches // 10)  # ~10 log lines per epoch when piped
+    interactive       = sys.stdout.isatty()
+    current_batch_size = args.batch_size
 
     for i in range(start_epoch, args.epochs):
-        dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
-        total_loss = 0.0
-        num_batches = 0
+        while True:
+            try:
+                train_loader    = DataLoader(dIn, batch_size=current_batch_size, shuffle=True)
+                total_batches   = len(train_loader)
+                heartbeat_every = max(1, total_batches // 10)
 
-        loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
-                      if interactive else train_loader
-        for arg1, arg2, arg3 in loader_iter:
-            if args.embedding_type == "glove-fixed":
-                dInputs        = arg1.to(common.device).to(common.dtype)
-                dLabels        = arg2.to(common.device).to(common.dtype)
-                dTargetIndices = arg3.to(common.device)
-            else:
-                dInputs        = arg1.to(common.device)
-                dLabels        = None
-                dTargetIndices = arg3.to(common.device)
+                dbg_output(f"Epoch {i+1}/{args.epochs} starting... (batch_size={current_batch_size})")
+                total_loss = 0.0
+                num_batches = 0
 
-            optimizer.zero_grad()
-            output = transformer.forward(dInputs)
+                loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
+                              if interactive else train_loader
+                for arg1, arg2, arg3 in loader_iter:
+                    if args.embedding_type == "glove-fixed":
+                        dInputs        = arg1.to(common.device).to(common.dtype)
+                        dLabels        = arg2.to(common.device).to(common.dtype)
+                        dTargetIndices = arg3.to(common.device)
+                    else:
+                        dInputs        = arg1.to(common.device)
+                        dLabels        = None
+                        dTargetIndices = arg3.to(common.device)
 
-            if args.output_type == "indices":
-                loss = loss_fn(output.permute(0,2,1), dTargetIndices)
-            elif args.output_type == "vecs":
-                loss = loss_fn(output, dLabels[...,:-1])
+                    optimizer.zero_grad()
+                    output = transformer.forward(dInputs)
 
-            loss.backward()
-            optimizer.step()
+                    if args.output_type == "indices":
+                        loss = loss_fn(output.permute(0,2,1), dTargetIndices)
+                    elif args.output_type == "vecs":
+                        loss = loss_fn(output, dLabels[...,:-1])
 
-            total_loss += loss.item()
-            num_batches += 1
+                    loss.backward()
+                    optimizer.step()
 
-            if not interactive and num_batches % heartbeat_every == 0:
-                dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+                    total_loss += loss.item()
+                    num_batches += 1
+
+                    if not interactive and num_batches % heartbeat_every == 0:
+                        dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+
+                break  # epoch completed
+
+            except torch.cuda.OutOfMemoryError:
+                new_batch = int(current_batch_size * 0.9)
+                if new_batch < 16:
+                    raise RuntimeError(f"OOM at batch_size={current_batch_size}, cannot reduce further")
+                torch.cuda.empty_cache()
+                dbg_output(f"OOM at batch_size={current_batch_size} — retrying epoch {i+1} with batch_size={new_batch}")
+                current_batch_size = new_batch
 
         dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
         if scheduler:
