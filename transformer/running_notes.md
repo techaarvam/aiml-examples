@@ -1,5 +1,71 @@
 # Transformer Model Experiments - Running Notes
 
+## Run 3 — Architecture Overhaul: Standard Pre-Norm Transformer (May 13–14, 2026)
+
+### Architecture Changes from Run 2
+- **Pre-norm** (LayerNorm before attention and FFN, not after)
+- **Additive residual** (replaced non-standard concatenation residual)
+- **Standard 4× FFN expansion**: d → 4d → d with GELU (was d → d)
+- **head_dim = vecDims / num_heads** (was each head using full vecDims)
+
+### Cloud Server (RTX 4090 48GB)
+| Parameter | Value |
+|-----------|-------|
+| vecDims | 512 |
+| num_heads | 8 |
+| num_layers | 12 |
+| window_size | 64 |
+| batch_size | 700 (tuned to fill 45GB VRAM) |
+| max_vocab_size | 30,000 |
+| float_type | bfloat16 |
+| Total params | 68,586,800 |
+| Tokens | 104,327,545 |
+| Batches/epoch | 149,040 |
+
+### Local Machine (RTX 5070 12GB)
+| Parameter | Value |
+|-----------|-------|
+| vecDims | 512 |
+| num_layers | 8 |
+| max_vocab_size | 50,000 |
+| batch_size | 160 (tuned to fill 12GB VRAM) |
+| Total params | ~76,000,000 |
+| Batches/epoch | 652,047 |
+
+### LR Experiments (Server, Epoch 1)
+| LR | Outcome |
+|----|---------|
+| 0.0003 | Stable but slow — loss 6.29→6.08 over first 45K batches |
+| 0.0012 | Unstable — running avg oscillating 8↔9 in first 1500 batches |
+| 0.0008 | In progress |
+
+### Key Insight: Batch Size vs Gradient Steps
+With batch=700 (server) vs batch=160 (local), the server does ~3× fewer gradient steps per epoch.
+Local reached lower loss at 28% of epoch 1 than server at 40%, explained entirely by step count.
+Fix: scale LR proportionally — `lr = base_lr × (server_batch / local_batch)`.
+
+### Loss Log — Server (lr=0.0003 baseline run)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 14,904 | 6.2923 |
+| 20% | 29,808 | 6.1602 |
+| 30% | 44,712 | 6.0834 |
+
+### Learnings
+Discovered that large batch sizes mean fewer gradient steps per epoch, which slows convergence — the fix is to scale LR proportionally with batch size (`lr = base_lr × batch/reference_batch`), something that wasn't obvious until comparing the server and local runs side by side. Tuning LR by watching live loss turned out to be unreliable and noisy; the standard approach for transformers is warmup + cosine decay. The original transformer paper (2017) includes warmup for this reason, and BERT and GPT-2 also use LR warmup. PyTorch's `CosineAnnealingLR` decays LR using `lr = eta_min + 0.5 × (lr_max - eta_min) × (1 + cos(π × t / T_max))` — warmup is a separate concern and not included. `OneCycleLR` combines both warmup and cosine decay in one scheduler.
+
+### Key References
+| Topic | Paper | Authors | Year |
+|-------|-------|---------|------|
+| Warmup + inverse sqrt decay | Attention Is All You Need | Vaswani et al. | 2017 |
+| Cosine annealing | SGDR: SGD with Warm Restarts | Loshchilov & Hutter | 2017 |
+| Warmup + cosine popularized | Bag of Tricks for Image Classification | He et al. | 2018 |
+| Transformer standard (warmup+cosine) | BERT | Devlin et al. | 2019 |
+| Transformer standard (warmup+cosine) | GPT-2 | Radford et al. | 2019 |
+| LR Range Test | Cyclical Learning Rates for Training Neural Networks | Leslie Smith | 2017 |
+
+---
+
 ## Run 2 — WikiText-103 (50MB), Learned Embedding (May 12, 2026)
 
 ### Hyperparameters
