@@ -52,14 +52,14 @@ max_vocab_size = 10000
 # Expected: ~4 nights (8 hrs/night) for 10 epochs
 [high]
 input          = "raw_data/wikitext103.txt"
-vecDims        = 128
+vecDims        = 512
 num_heads      = 8
 num_layers     = 8
 window_size    = 64
 batch_size     = 512
 epochs         = 100
 lr             = 0.0003
-float_type     = "float16"
+float_type     = "bfloat16"
 max_vocab_size = 50000
 cache_file     = "raw_data/wikitext103.cache"
 
@@ -67,12 +67,13 @@ cache_file     = "raw_data/wikitext103.cache"
 # Purpose: real training run on cloud GPU (A100 / 4090)
 [server]
 input          = "raw_data/wikitext103.txt"
-vecDims        = 256
+vecDims        = 512
 num_heads      = 8
-num_layers     = 8
-window_size    = 128
-batch_size     = 1024
+num_layers     = 12
+window_size    = 512
+batch_size     = 64
 epochs         = 100
 lr             = 0.0003
-max_vocab_size = 50000
+max_vocab_size = 30000
+float_type     = "bfloat16"
 cache_file     = "raw_data/wikitext103.cache"

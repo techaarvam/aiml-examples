@@ -34,25 +34,39 @@ class MultiHead (nn.Module):
 
         self.Wo = nn.ParameterList([nn.Parameter(torch.randn(common.vecDims, common.vecDims) * (1.0 / (common.vecDims) ** 0.5)) for _ in range(args.num_layers)])
         if (args.use_custom_norm):
-            self.learnedMeanShift = nn.ParameterList([nn.Parameter(torch.zeros(1,1,vecDims)) for _ in range(args.num_layers)])
-            self.learnedStdScale  = nn.ParameterList([nn.Parameter(torch.ones(1,1,vecDims))  for _ in range(args.num_layers)])
+            self.learnedMeanShift1 = nn.ParameterList([nn.Parameter(torch.zeros(1,1,vecDims)) for _ in range(args.num_layers)])
+            self.learnedStdScale1  = nn.ParameterList([nn.Parameter(torch.ones(1,1,vecDims))  for _ in range(args.num_layers)])
+            self.learnedMeanShift2 = nn.ParameterList([nn.Parameter(torch.zeros(1,1,vecDims)) for _ in range(args.num_layers)])
+            self.learnedStdScale2  = nn.ParameterList([nn.Parameter(torch.ones(1,1,vecDims))  for _ in range(args.num_layers)])
         else:
-            self.norm = nn.ModuleList([nn.LayerNorm(vecDims) for _ in range(args.num_layers)])
+            self.norm1 = nn.ModuleList([nn.LayerNorm(vecDims) for _ in range(args.num_layers)])
+            self.norm2 = nn.ModuleList([nn.LayerNorm(vecDims) for _ in range(args.num_layers)])
 
-        # FFN per token using the same MLP block (same weights)! 
-        # Input shape for this FFN: attentionOuputs's tokens + X residual's tokens, so 2*vecDims
-        # This MLP can help map attention space to token space
-        
-        self.mlp = nn.ModuleList( [ nn.Sequential (
-                nn.Linear(vecDims * 2, vecDims),
-                nn.ReLU(inplace=True)
-            )  for _ in range(args.num_layers) ] )
+        # Standard FFN: d -> 4d -> d with GELU
+        self.mlp = nn.ModuleList([nn.Sequential(
+                nn.Linear(vecDims, vecDims * 4),
+                nn.GELU(),
+                nn.Linear(vecDims * 4, vecDims)
+            ) for _ in range(args.num_layers)])
         if (args.output_type == "indices"):
             self.outputLinear = nn.Linear(vecDims, common.vocabSize)
         elif (args.output_type == "vecs"):
             self.outputLinear = nn.Linear(vecDims, vecDims-1)
         
-            
+    def normalize (self, X, norm, learnedParams=None):
+        # Instead of using nn.LayerNorm, using mean/std operations,
+        # since this is a learning project and the goal is to break
+        # the transformer down to simplest operations possible.
+
+        if (args.use_custom_norm):
+            learnedMeanShift, learnedStdScale = learnedParams
+            mean = X.mean(dim=-1, keepdim=True)
+            std = X.std(dim=-1, keepdim=True)
+            normedX = learnedStdScale * (X - mean) / (std + 1e-6) + learnedMeanShift
+        else:
+            normedX = norm(X)
+        return normedX
+
 
     def forward (self, X):
         #Shape Notes:
@@ -64,11 +78,20 @@ class MultiHead (nn.Module):
             X = X + self.posEmbedding(positions)          # X is float GloVe vecs
         else:
             X = self.embedding(X) + self.posEmbedding(positions)  # X is long indices
-        residual = X
-        
         for layer in range (0, args.num_layers):
+            # A few changes from the previous version
+            #  1. normalize before the output weight operation.
+            #  2. Add the residuals and normalize again before the FFN
+            #  3. Add the residuals insted of the non-standard concatenation that
+            #      was done in the previous version.
+            #  4. Do an expanding FFN with GeLU insted of the previous 2d <-> d.
+            #      change to d <-> 4d <-> d
+
+            normedX = self.normalize(X, self.norm1[layer],
+                (self.learnedMeanShift1[layer], self.learnedStdScale1[layer]) if args.use_custom_norm else None)
+
             # batch_size dim in expand is kept as -1 mindful of the last batch which may not be batch_size.
-            attentionOutput = X.unsqueeze(1).expand(-1, args.num_heads, -1, common.vecDims) 
+            attentionOutput = normedX.unsqueeze(1).expand(-1, args.num_heads, -1, common.vecDims) 
 
             attentionOutput = self.attentionHeads[layer].forward ( attentionOutput)
             # attentionOutput is batch_size, num_heads, window_size, vecDim
@@ -76,32 +99,17 @@ class MultiHead (nn.Module):
             attentionOutput = attentionOutput.permute(0,2,1,3).flatten(start_dim=2)
             attentionOutput = attentionOutput @ self.Wo[layer]
 
-            # Instead of using nn.LayerNorm, using mean/std operations, 
-            # since this is a learning project and the goal is to break
-            # the transformer down to simplest operations possible.
+            X = X + attentionOutput
 
-            if (args.use_custom_norm):
-                mean = attentionOutput.mean(dim=-1, keepdim=True)
-                std = attentionOutput.std(dim=-1, keepdim=True)
-                attentionOutput = self.learnedStdScale[layer] * (attentionOutput - mean) / (std + 1e-6) + self.learnedMeanShift[layer]
-                mean = residual.mean(dim=-1, keepdim=True)
-                std = residual.std(dim=-1, keepdim=True)
-                residual = self.learnedStdScale[layer] * (residual - mean) / (std + 1e-6) + self.learnedMeanShift[layer]
-            else:
-                attentionOutput = self.norm[layer](attentionOutput)
-                residual = self.norm[layer](residual)
+            normedX = self.normalize(X, self.norm2[layer],
+                (self.learnedMeanShift2[layer], self.learnedStdScale2[layer]) if args.use_custom_norm else None)
 
-
-            attentionOutput = self.mlp[layer] ( torch.cat ( (attentionOutput, residual), dim=2) )
-            residual = attentionOutput
-            X = attentionOutput
-            # X = X + attentionOutput Residual is concatenated to the MLP and weigted residual mix
-            # happens, so X = X + attentionOutput is not needed
+            X = X + self.mlp[layer] ( normedX )
 
         if (args.output_type == "indices"):
             # Its nice that both the mlp above and the outputLinear below are broadcasting correctly.
             # attentionOuput is batch_size, window_size, vecDims, but outputLinear is vecDims, vocabSize!
-            return self.outputLinear(attentionOutput)
+            return self.outputLinear(X)
         elif (args.output_type == "vecs"):
-            return self.outputLinear(attentionOutput) # was [..., :-1] @ self.wv.T # wv is a Tensor from: common.wordVecs
+            return self.outputLinear(X) # was [..., :-1] @ self.wv.T # wv is a Tensor from: common.wordVecs
 
