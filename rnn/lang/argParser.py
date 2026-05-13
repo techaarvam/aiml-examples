@@ -103,6 +103,13 @@ def build_parser():
         default=1,
         help="Number of stacked GRU layers.",
     )
+    parser.add_argument(
+        "--rep-penalty",
+        dest="rep_penalty",
+        type=float,
+        default=0.0,
+        help="Repetition penalty weight for glove mode (0=disabled).",
+    )
 
     return parser
 

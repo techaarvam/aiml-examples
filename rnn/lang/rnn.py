@@ -32,6 +32,10 @@ else:
     vecDim = d.getInputSize()
     rnn = langRNN.langRNN(vecDim, args.hidden_dim).to(common.device)
 
+total_params = sum(p.numel() for p in rnn.parameters())
+trainable_params = sum(p.numel() for p in rnn.parameters() if p.requires_grad)
+dbg_output(f"Model parameters: {total_params:,} total, {trainable_params:,} trainable")
+
 if args.model_file:
     rnn.load_state_dict(torch.load(args.model_file, map_location=common.device))
     dbg_output(f"Loaded model from {args.model_file}")
@@ -56,13 +60,20 @@ else:
         total_cos = 0.0
         num_batches = 0
 
+        prev_output = None
         for inputs, labels in train_loader:
             dInputs, dLabels = inputs.to(common.device), labels.to(common.device)
             optimizer.zero_grad()
 
-            output = rnn.forward(dInputs)
+            output, _ = rnn.forward(dInputs)
 
             loss = loss_fn(output, dLabels)
+            if args.output_mode == "glove" and args.rep_penalty > 0 and prev_output is not None:
+                n = min(output.shape[0], prev_output.shape[0])
+                cos_sim = torch.nn.functional.cosine_similarity(output[:n], prev_output[:n].detach(), dim=1)
+                loss = loss + args.rep_penalty * cos_sim.clamp(min=0).mean()
+            prev_output = output.detach()
+
             loss.backward()
             # Hack?!
             torch.nn.utils.clip_grad_norm_(rnn.parameters(), max_norm=1.0)
@@ -103,7 +114,7 @@ def predict_next_word(output):
         idx = random.choice(topk.indices.tolist())
         return vocab[idx], None
     else:
-        word = random.choice(wordVecs.similar_by_vector(output.squeeze(0).cpu().numpy(), topn=5))[0]
+        word = random.choice(wordVecs.similar_by_vector(output.squeeze(0).cpu().numpy(), topn=1))[0]
         vec = torch.tensor(wordVecs[word], dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(common.device)
         return word, vec
 
@@ -121,9 +132,11 @@ userTokens = word_tokenize(userInput.lower())
 vectors = get_input_vectors(userTokens, wordVecs, vecDim)
 generated = list(userTokens[:args.window_size])
 
+h = None
 for i in range(0, args.output_size):
     with torch.no_grad():
-        output = rnn.forward(vectors)
+        output, h = rnn.forward(vectors, h)
+        if args.output_mode == "softmax": h = None
         word, vec = predict_next_word(output)
         generated.append(word)
         if args.output_mode == "softmax":
@@ -145,10 +158,12 @@ while True:
         userTokens = word_tokenize(userInput.lower())
         vectors = get_input_vectors(userTokens, wordVecs, vecDim)
         generated = list(userTokens[:args.window_size])
+        h = None
     else:
         for _ in range(args.output_size):
             with torch.no_grad():
-                output = rnn.forward(vectors)
+                output, h = rnn.forward(vectors, h)
+                if args.output_mode == "softmax": h = None
                 word, vec = predict_next_word(output)
                 generated.append(word)
                 if args.output_mode == "softmax":

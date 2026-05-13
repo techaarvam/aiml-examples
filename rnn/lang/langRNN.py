@@ -37,19 +37,20 @@ class langRNN(nn.Module):
             nn.Linear(hidden_dim, output_size)
         )
 
-    def forward(self, full_x):
-        # full_x will have args.window_size items. 
+    def forward(self, full_x, h=None):
+        # full_x will have args.window_size items.
 
         # inference batch_size is different, so this hack to not use zeros_like(self.h)
-        h = []
-        for layer in range(args.num_layers):
-            h.append(torch.zeros(full_x.shape[0], self.hidden_dim, device = full_x.device ))
+        if h is None:
+            h = []
+            for layer in range(args.num_layers):
+                h.append(torch.zeros(full_x.shape[0], self.hidden_dim, device = full_x.device ))
 
-        # zeroout the internal state h for each sequence. 
+        # zeroout the internal state h for each sequence.
         # h shape is correctly batch_size, dim: so each item in the batch has its own zeroed out state to work with
 
         for i in range(0, args.window_size):
-            
+
             x = full_x[:,i,:]
             for layer in range(0, args.num_layers):
 
@@ -64,10 +65,7 @@ class langRNN(nn.Module):
                 h[layer] = ( 1 - z_out ) * h[layer] + z_out * ch_out
                 x = h[layer]
 
- 
-
-
-        return self.mlp(h[args.num_layers-1])
+        return self.mlp(h[args.num_layers-1]), h
         
 
 class Gates(nn.Module):
