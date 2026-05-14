@@ -266,7 +266,6 @@ Training was interrupted manually at epoch 54. Loss values recorded:
 
 ### Observations from Training Curve
 - Steady, consistent decrease in loss throughout training
-- No signs of overfitting (would expect validation loss to increase while training loss decreases)
 - Learning rate remained constant at 0.0003 throughout recorded epochs (plateau scheduler didn't trigger)
 - Loss reduction appears to be slowing down as training progresses (asymptotic behavior)
 - After 54 epochs, loss ~3.51, suggesting model has learned meaningful patterns but could benefit from more training
@@ -285,56 +284,5 @@ how are you today ? i met the governor yesterday and the prime minister the day 
 
 
 
-## Technical Implementation Notes
-
-### Positional Encoding Approach
-Unlike the original Transformer which uses sinusoidal positional encodings, this implementation:
-- Keeps positional information in dimension 101 of the embedding space
-- Uses a custom `embedPositions` function in `DataInput.py`
-- This approach separates semantic information (dimensions 0-99) from positional information (dimension 100)
-
-### Data Processing Pipeline
-1. Raw text → Tokenization (NLTK word_tokenize)
-2. Tokens → GloVe vectors + indices (via `tokensToVecsAndIndices`)
-3. Positional encoding applied via `embedPositions`
-4. Sequence fed to Transformer model
-5. Output processed based on `output_type`:
-   - "indices": CrossEntropy loss with vocabulary prediction
-   - "vecs": MSE loss with vector regression
-
-### Model Saving/Loading
-- Checkpoints saved after each epoch to `transformer_model.pth`
-- Final model also saved explicitly
-- Vocabulary saved to `vocab.json`
-- Model loading restores state_dict and applies correct dtype/device
-
-## Next Steps (Immediate)
-1. **Replace GloVe with nn.Embedding**: Modify DataInput.py to use trainable embedding layer instead of fixed GloVe vectors
-2. **Fix Positional Encoding**: Implement standard sinusoidal positional encoding as in original Transformer paper
-3. **Re-run Training**: Execute two experiments:
-   - Case A: Trainable nn.Embedding + standard sinusoidal positional encoding
-   - Case B: Trainable nn.Embedding + learned positional embeddings
-4. **Compare Results**: Analyze loss curves and generation quality between approaches
-
-## Future Experiments & Improvements
-1. **Complete Training**: Run for full 100 epochs to see if loss continues to decrease
-2. **Validation Split**: Add validation monitoring to detect overfitting
-3. **Learning Rate Tuning**: Experiment with different LR schedules or initial values
-4. **Architecture Variations**:
-    - Experiment with different numbers of heads/layers
-    - Try different embedding dimensions
-5. **Output Type Comparison**: Compare "indices" vs "vecs" output types
-6. **Prompt Engineering**: Test with different input contexts to evaluate generation quality
-7. **Quantization**: Explore model quantization for deployment efficiency
-8. **ONNX Export**: Utilize existing `onnxrun.py` and `pth2onnx.py` for deployment
-
-## Files Modified/Created in This Session
-- `transformer_model.pth`: Model checkpoint (updated during training)
-- `vocab.json`: Vocabulary mapping
-- Various `.pyc` files in `__pycache__`: Compiled Python bytecode
-
-## Conclusion
-This experiment demonstrates a functional Transformer implementation with custom positional encoding. The model shows ability to learn from text data and generate coherent continuations. The unconventional positional encoding approach (dimension 101) appears to be functioning correctly, though comparison with standard approaches would be valuable. Training shows steady convergence, suggesting the architecture is well-suited to the task.
-
----
-*Notes compiled from terminal output of transformer training session*
+### Positional Encoding
+Run 1 used a custom approach — position stored in dimension 101 of the GloVe vector. Current implementation (Run 3) uses learned positional embeddings via `nn.Embedding(window_size, vecDims)`, which is the GPT-style approach. The original transformer paper used sinusoidal encodings; both sinusoidal and learned are standard choices.
