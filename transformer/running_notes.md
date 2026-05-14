@@ -131,7 +131,7 @@ In our runs, batch=160 (local) converged faster than batch=640–700 (server) at
 **Reference:** "An Empirical Model of Large-Batch Training" — McCandlish et al., OpenAI, 2018.
 
 ### Learnings
-Discovered that large batch sizes mean fewer gradient steps per epoch, which slows convergence — the fix is to scale LR proportionally with batch size (`lr = base_lr × batch/reference_batch`), something that wasn't obvious until comparing the server and local runs side by side. Tuning LR by watching live loss turned out to be unreliable and noisy; the standard approach for transformers is warmup + cosine decay. The original transformer paper (2017) includes warmup for this reason, and BERT and GPT-2 also use LR warmup. PyTorch's `CosineAnnealingLR` decays LR using `lr = eta_min + 0.5 × (lr_max - eta_min) × (1 + cos(π × t / T_max))` — warmup is a separate concern and not included. `OneCycleLR` combines both warmup and cosine decay in one scheduler.
+Discovered that large batch sizes mean fewer gradient steps per epoch, which slows convergence. One approach tried was scaling LR proportionally with batch size (`lr = base_lr × batch/reference_batch`), but experiments showed this alone did not close the gap — gradient step count remains the dominant factor. Tuning LR by watching live loss turned out to be unreliable and noisy; the standard approach for transformers is warmup + cosine decay. The original transformer paper (2017) includes warmup, and BERT and GPT-2 also use LR warmup. PyTorch's `CosineAnnealingLR` decays LR using `lr = eta_min + 0.5 × (lr_max - eta_min) × (1 + cos(π × t / T_max))`. Next experiment: properly implement LR scaling with warmup + cosine decay and measure impact.
 
 ### Key References
 | Topic | Paper | Authors | Year |
