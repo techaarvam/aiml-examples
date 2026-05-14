@@ -32,24 +32,103 @@
 | Total params | ~76,000,000 |
 | Batches/epoch | 652,047 |
 
+### Parameter split: vocab vs transformer core
+Vocab size dominates total parameter count. Larger vocab = more embedding + output params, fewer left for transformer layers.
+| | Local (50k vocab) | Server (30k vocab) |
+|---|---|---|
+| Vocab-related params | 51.2M | 30.7M |
+| Transformer core | 24.8M (8 layers) | 37.3M (12 layers) |
+| Total | ~76M | 68.6M |
+Server has more transformer core capacity despite lower total params.
+
 ### LR Experiments (Server, Epoch 1)
-| LR | Outcome |
-|----|---------|
-| 0.0003 | Stable but slow — loss 6.29→6.08 over first 45K batches |
-| 0.0012 | Unstable — running avg oscillating 8↔9 in first 1500 batches |
-| 0.0008 | In progress |
+| LR | Vocab | Outcome |
+|----|-------|---------|
+| 0.0003 | 30k | Stable, steady — loss 6.29→6.08 over first 45K batches |
+| 0.0012 | 30k | Unstable — running avg oscillating 8↔9 in first 1500 batches |
+| 0.0008 | 30k | Started high (6.79), flattened rapidly, ~6.33 at 50% — worse than 0.0003 baseline |
+| 0.0006 | 50k | 6.53→6.44→6.36 (10/20/30%) — see vocab experiment below |
 
-### Key Insight: Batch Size vs Gradient Steps
-With batch=700 (server) vs batch=160 (local), the server does ~3× fewer gradient steps per epoch.
-Local reached lower loss at 28% of epoch 1 than server at 40%, explained entirely by step count.
-Fix: scale LR proportionally — `lr = base_lr × (server_batch / local_batch)`.
-
-### Loss Log — Server (lr=0.0003 baseline run)
+### Loss Log — Server (lr=0.0003 baseline)
 | Checkpoint | Batch | Loss |
 |------------|-------|------|
 | 10% | 14,904 | 6.2923 |
 | 20% | 29,808 | 6.1602 |
 | 30% | 44,712 | 6.0834 |
+
+### Loss Log — Server (lr=0.0008 restart)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 14,904 | 6.7883 |
+| 20% | 29,808 | 6.5144 |
+| 30% | 44,712 | 6.4053 |
+| 40% | 59,616 | 6.3446 |
+| 50% | 73,777 | 6.3250 |
+
+### Loss Log — Server (50k vocab, lr=0.0006, batch=640)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 16,301 | 6.5308 |
+| 20% | 32,602 | 6.4404 |
+| 30% | 48,903 | 6.3554 |
+
+### Loss Log — Local (lr=0.0003)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 65,204 | 5.3889 |
+| 20% | 130,408 | 5.0691 |
+| 30% | 195,612 | 4.9001 |
+| 40% | 260,816 | 4.7956 |
+| 50% | 326,020 | 4.7245 |
+| 60% | 391,224 | 4.6718 |
+| 63% | 413,169 | 4.6571 |
+
+### Vocab Size Experiment (Server, 50k vocab, lr=0.0006, batch=640)
+Restarted server with 50k vocab to match local and isolate whether vocab was contributing to local's better convergence.
+
+| | Baseline (random) | Loss at 10% | Gap closed |
+|---|---|---|---|
+| Server (30k, lr=0.0003) | 10.30 | 6.29 | 59.0% |
+| Server (50k, lr=0.0006) | 10.82 | 6.53 | 58.6% |
+| Local  (50k, lr=0.0003) | 10.82 | 5.39 | 74.2% |
+
+Server with 50k vocab and higher LR landed at virtually the same relative position as the original 30k run (58.6% vs 59%). Local is far ahead at 74%. **Vocab size is not the contributing factor — gradient steps are.** The local machine's 4× more updates per epoch is the dominant explanation, and it holds regardless of vocab size or LR changes on the server.
+
+### Key Insight: Batch Size vs Gradient Steps
+| | Local | Server |
+|---|---|---|
+| Batch size | 160 | 700 |
+| Updates/epoch | 652,047 | 149,040 |
+| Loss at ~50% epoch 1 | 4.72 | 6.33 |
+
+Local is ahead in loss at the same wall-clock time (loss ~4.64 vs ~6.1 at 820 mins), but the gap is smaller than the gradient-step count alone suggests — server epochs complete in ~820 mins vs local's ~1235 mins, so the server partially compensates with faster epoch turnaround. The gradient step count (4.4× more on local) explains the loss gap; the faster server epoch time partially closes the wall-clock gap. Estimated wall-clock to loss=3.5: local ~12,350 mins (10 epochs), server ~16,400 mins (20 epochs) — local ~25% faster, not dramatically so. The 5070 at batch=160 appears better matched to this model size than the 4090 at batch=700.
+
+Possible directions to explore (not yet experimented):
+- Reduce server batch to ~256 to get more gradient steps while accepting lower VRAM utilisation
+- MPS (Multi-Process Service) — allows multiple processes to share one GPU concurrently; unclear if this helps training convergence
+- DDP (DistributedDataParallel) across multiple GPUs — each GPU handles a smaller batch, gradients averaged before update; could give both utilisation and gradient steps, but requires multi-GPU setup
+
+### Critical Batch Size — Theoretical Shape
+Convergence speed (loss drop per wall-clock time) vs batch size follows three regimes:
+
+```
+convergence
+speed          ╭───────╮
+               │       ╰──────────────
+             ╭─╯
+           ╭─╯
+───────────╯
+           1        Bs              N
+                critical batch
+```
+
+- **Batch 1 → Bs:** noise-limited regime. Doubling batch ≈ halves steps needed — wall-clock convergence stays roughly constant. LR scaling keeps you here.
+- **Around Bs:** peak efficiency — GPU well-utilised, gradient estimates accurate enough, update frequency still high.
+- **Bs → N:** curvature-limited regime. Gradients are already accurate enough; larger batches buy less convergence per unit compute. Diminishing returns.
+
+In our runs, batch=160 (local) converged faster than batch=640–700 (server) at the same wall-clock time, consistent with the server batch being in the diminishing returns regime.
+
+**Reference:** "An Empirical Model of Large-Batch Training" — McCandlish et al., OpenAI, 2018.
 
 ### Learnings
 Discovered that large batch sizes mean fewer gradient steps per epoch, which slows convergence — the fix is to scale LR proportionally with batch size (`lr = base_lr × batch/reference_batch`), something that wasn't obvious until comparing the server and local runs side by side. Tuning LR by watching live loss turned out to be unreliable and noisy; the standard approach for transformers is warmup + cosine decay. The original transformer paper (2017) includes warmup for this reason, and BERT and GPT-2 also use LR warmup. PyTorch's `CosineAnnealingLR` decays LR using `lr = eta_min + 0.5 × (lr_max - eta_min) × (1 + cos(π × t / T_max))` — warmup is a separate concern and not included. `OneCycleLR` combines both warmup and cosine decay in one scheduler.
