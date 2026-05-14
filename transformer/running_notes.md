@@ -65,12 +65,20 @@ Server has more transformer core capacity despite lower total params.
 | 40% | 59,616 | 6.3446 |
 | 50% | 73,777 | 6.3250 |
 
-### Loss Log — Server (50k vocab, lr=0.0006, batch=640)
+### Loss Log — Server (50k vocab, lr=0.0006, batch=640, 12 layers)
 | Checkpoint | Batch | Loss |
 |------------|-------|------|
 | 10% | 16,301 | 6.5308 |
 | 20% | 32,602 | 6.4404 |
 | 30% | 48,903 | 6.3554 |
+| 40% | 65,204 | 6.3040 |
+
+### Loss Log — Server (50k vocab, lr=0.0003, batch=640, 8 layers)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 16,301 | 6.2138 |
+| 20% | 32,602 | 6.0775 |
+| 30% | 48,903 | 6.0184 |
 
 ### Loss Log — Local (lr=0.0003)
 | Checkpoint | Batch | Loss |
@@ -81,7 +89,18 @@ Server has more transformer core capacity despite lower total params.
 | 40% | 260,816 | 4.7956 |
 | 50% | 326,020 | 4.7245 |
 | 60% | 391,224 | 4.6718 |
-| 63% | 413,169 | 4.6571 |
+| 70% | 456,428 | 4.6314 |
+| 80% | 521,632 | 4.5997 |
+| 90% | 586,836 | 4.5746 |
+| 100% | 652,040 | 4.5536 |
+| **Epoch 1 final** | — | **4.5536** |
+
+Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
+
+### Loss Log — Local Epoch 2 (resumed, lr=0.0003)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 65,204 | 4.3585 |
 
 ### Vocab Size Experiment (Server, 50k vocab, lr=0.0006, batch=640)
 Restarted server with 50k vocab to match local and isolate whether vocab was contributing to local's better convergence.
@@ -92,7 +111,15 @@ Restarted server with 50k vocab to match local and isolate whether vocab was con
 | Server (50k, lr=0.0006) | 10.82 | 6.53 | 58.6% |
 | Local  (50k, lr=0.0003) | 10.82 | 5.39 | 74.2% |
 
-Server with 50k vocab and higher LR landed at virtually the same relative position as the original 30k run (58.6% vs 59%). Local is far ahead at 74%. **Vocab size is not the contributing factor — gradient steps are.** The local machine's 4× more updates per epoch is the dominant explanation, and it holds regardless of vocab size or LR changes on the server.
+Server with 50k vocab and higher LR landed at virtually the same relative position as the original 30k run (58.6% vs 59%). Vocab size appears to have minimal impact on convergence rate. A subsequent experiment (server, 8 layers, batch=640, lr=0.0003) showed noticeably faster descent than the 12-layer run at the same batch size:
+
+| | 10% | 20% | 30% | drop (10→20%) |
+|---|---|---|---|---|
+| Server 12L (lr=0.0006) | 6.5308 | 6.4404 | 6.3554 | -0.090 |
+| Server  8L (lr=0.0003) | 6.2138 | 6.0775 | 6.0184 | -0.136 |
+| Local   8L (lr=0.0003) | 5.3889 | 5.0691 | 4.9001 | -0.320 |
+
+Layer depth appears to be a contributing factor alongside batch size — both variables affect early convergence rate. Local's advantage is still primarily gradient steps (4× more updates/epoch), but the 12-layer depth was adding an additional drag. More epochs needed before firm conclusions on final loss floor.
 
 ### Key Insight: Batch Size vs Gradient Steps
 | | Local | Server |
