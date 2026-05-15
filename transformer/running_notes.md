@@ -120,6 +120,17 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 40% | 260,816 | 4.3497 |
 | 50% | 326,020 | 4.3476 |
 | 60% | 391,224 | 4.3463 |
+| 70% | 456,428 | 4.3451 |
+| 80% | 521,632 | 4.3436 |
+| 90% | 586,836 | 4.3417 |
+| 100% | 652,040 | 4.3398 |
+| **Epoch 2 final** | — | **4.3398** |
+
+### Loss Log — Local Epoch 3 (lr=0.0003, input: wikitext103.txt)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 65,204 | 4.3195 |
+| 20% | 130,408 | 4.3180 |
 
 ### BTM Round 1 — Branch-Train-Merge (May 2026)
 
