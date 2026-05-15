@@ -121,6 +121,44 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 50% | 326,020 | 4.3476 |
 | 60% | 391,224 | 4.3463 |
 
+### BTM Round 1 — Branch-Train-Merge (May 2026)
+
+**Setup**
+- Starting checkpoint: epoch 2 local model (WikiText-103, loss ~4.35)
+- 4 Vast.ai RTX 3090 (24GB) machines, each training on one epoch slice
+- Data per branch: Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42)
+- Merge tool: `merge_checkpoints.py` — averages weights, resets optimizer state
+
+**Branch assignments**
+| Branch | Data slice |
+|--------|------------|
+| A | epoch_3.txt |
+| B | epoch_4.txt |
+| C | epoch_5.txt |
+| D | epoch_6.txt |
+
+**Config (all branches)**
+| Parameter | Value |
+|-----------|-------|
+| vecDims | 512 |
+| num_heads | 8 |
+| num_layers | 8 |
+| window_size | 64 |
+| batch_size | 160 |
+| lr | 0.0003 |
+| float_type | bfloat16 |
+| max_vocab_size | 50,000 |
+
+**Command**
+```
+python runner.py runs.toml btm --epochs 3 --cache_file raw_data/data.cache
+```
+
+**Loss at start of branch training (new distribution: Wiki+OWT)**
+All 4 branches: ~7.2
+
+---
+
 ### Vocab Size Experiment (Server, 50k vocab, lr=0.0006, batch=640)
 Restarted server with 50k vocab to match local and isolate whether vocab was contributing to local's better convergence.
 
@@ -205,6 +243,9 @@ Discovered that large batch sizes mean fewer gradient steps per epoch, which slo
 | Loss scaling with model size/depth | Scaling Laws for Neural Language Models | Kaplan et al., OpenAI | 2020 |
 | Pre-LN vs Post-LN training stability | On Layer Normalization in the Transformer Architecture | Xiong et al. | 2020 |
 | Compute-optimal training (tokens per param) | Training Compute-Optimal Large Language Models | Hoffmann et al., DeepMind | 2022 |
+| Federated averaging of model weights | Communication-Efficient Learning of Deep Networks from Decentralized Data (FedAvg) | McMahan et al., Google | 2017 |
+| Weight averaging improves generalization | Model Soups: Averaging Weights of Fine-tuned Models Improves Accuracy | Wortsman et al. | 2022 |
+| Parallel training on data slices + merge | Branch-Train-Merge: Embarrassingly Parallel Training of Expert Language Models | Li et al., Meta | 2022 |
 
 ---
 
