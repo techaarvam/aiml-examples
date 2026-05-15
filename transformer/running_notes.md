@@ -80,6 +80,20 @@ Server has more transformer core capacity despite lower total params.
 | 20% | 32,602 | 6.0775 |
 | 30% | 48,903 | 6.0184 |
 
+### Epoch Directory Index (Local)
+| Epoch | Directory | Input File | Notes |
+|-------|-----------|------------|-------|
+| 1 | high_20260513_203905 | wikitext103.txt | WikiText-103 only; OOM mid-epoch, resumed from checkpoint |
+| 2 | high_20260514_172435 | wikitext103.txt | Second pass on same corpus |
+| 3 | — | epochs/epoch_3.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 1 of 8 |
+| 4 | — | epochs/epoch_4.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 2 of 8 |
+| 5 | — | epochs/epoch_5.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 3 of 8 |
+| 6 | — | epochs/epoch_6.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 4 of 8 |
+| 7 | — | epochs/epoch_7.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 5 of 8 |
+| 8 | — | epochs/epoch_8.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 6 of 8 |
+| 9 | — | epochs/epoch_9.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 7 of 8 |
+| 10 | — | epochs/epoch_10.txt | Wiki+OWT1+OWT2 mixed, offline-shuffled (seed=42), slice 8 of 8 |
+
 ### Loss Log — Local (lr=0.0003)
 | Checkpoint | Batch | Loss |
 |------------|-------|------|
@@ -162,6 +176,19 @@ In our runs, batch=160 (local) converged faster than batch=640–700 (server) at
 
 **Reference:** "An Empirical Model of Large-Batch Training" — McCandlish et al., OpenAI, 2018.
 
+### Scale: This Run vs. Production
+
+| | Local (this run) | LLaMA 3 |
+|---|---|---|
+| GPUs | 1× RTX 5070 | 16,000× H100 |
+| VRAM | 12 GB | 1,280,000 GB |
+| Params | 76M | 405B |
+| Tokens trained | ~400M | 15T |
+| Estimated cost | electricity | ~$50M |
+
+Chinchilla-optimal tokens for 76M params: ~1.5B. This run reaches ~400M (27% of optimal).
+The training loop is identical.
+
 ### Learnings
 Discovered that large batch sizes mean fewer gradient steps per epoch, which slows convergence. One approach tried was scaling LR proportionally with batch size (`lr = base_lr × batch/reference_batch`), but experiments showed this alone did not close the gap — gradient step count remains the dominant factor. Tuning LR by watching live loss turned out to be unreliable and noisy; the standard approach for transformers is warmup + cosine decay. The original transformer paper (2017) includes warmup, and BERT and GPT-2 also use LR warmup. PyTorch's `CosineAnnealingLR` decays LR using `lr = eta_min + 0.5 × (lr_max - eta_min) × (1 + cos(π × t / T_max))`. Next experiment: properly implement LR scaling with warmup + cosine decay and measure impact.
 
@@ -177,6 +204,7 @@ Discovered that large batch sizes mean fewer gradient steps per epoch, which slo
 | Critical batch size | An Empirical Model of Large-Batch Training | McCandlish et al., OpenAI | 2018 |
 | Loss scaling with model size/depth | Scaling Laws for Neural Language Models | Kaplan et al., OpenAI | 2020 |
 | Pre-LN vs Post-LN training stability | On Layer Normalization in the Transformer Architecture | Xiong et al. | 2020 |
+| Compute-optimal training (tokens per param) | Training Compute-Optimal Large Language Models | Hoffmann et al., DeepMind | 2022 |
 
 ---
 
