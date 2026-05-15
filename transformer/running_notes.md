@@ -101,6 +101,11 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | Checkpoint | Batch | Loss |
 |------------|-------|------|
 | 10% | 65,204 | 4.3585 |
+| 20% | 130,408 | 4.3568 |
+| 30% | 195,612 | 4.3540 |
+| 40% | 260,816 | 4.3497 |
+| 50% | 326,020 | 4.3476 |
+| 60% | 391,224 | 4.3463 |
 
 ### Vocab Size Experiment (Server, 50k vocab, lr=0.0006, batch=640)
 Restarted server with 50k vocab to match local and isolate whether vocab was contributing to local's better convergence.
@@ -169,6 +174,9 @@ Discovered that large batch sizes mean fewer gradient steps per epoch, which slo
 | Transformer standard (warmup+cosine) | BERT | Devlin et al. | 2019 |
 | Transformer standard (warmup+cosine) | GPT-2 | Radford et al. | 2019 |
 | LR Range Test | Cyclical Learning Rates for Training Neural Networks | Leslie Smith | 2017 |
+| Critical batch size | An Empirical Model of Large-Batch Training | McCandlish et al., OpenAI | 2018 |
+| Loss scaling with model size/depth | Scaling Laws for Neural Language Models | Kaplan et al., OpenAI | 2020 |
+| Pre-LN vs Post-LN training stability | On Layer Normalization in the Transformer Architecture | Xiong et al. | 2020 |
 
 ---
 
