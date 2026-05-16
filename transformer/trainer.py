@@ -6,6 +6,7 @@
 # --------------------------------------------------
 import sys
 import os
+import json
 import time
 import DataInput
 import torch
@@ -28,7 +29,17 @@ set_verbosity (args.verbosity)
 common.dtype = {'float32': torch.float32, 'float16': torch.float16,
                 'bfloat16': torch.bfloat16, 'float8': torch.float8_e4m3fn}[args.float_type]
 
-dIn = DataInput.DataInput()
+def _resolve_input_files():
+    if args.input_list:
+        if args.input_list.endswith('.json'):
+            with open(args.input_list) as f:
+                return json.load(f)
+        return [p.strip() for p in args.input_list.split(',')]
+    return None
+
+_input_files = _resolve_input_files()
+_cycling     = _input_files is not None
+dIn = DataInput.DataInput() if ((args.model_file and not args.resume) or not _cycling) else None
 
 transformer = multihead.MultiHead ().to(common.device).to(common.dtype)
 total_params = sum(p.numel() for p in transformer.parameters())
@@ -78,13 +89,26 @@ if not args.model_file or args.resume:
         scheduler = None
 
     interactive    = sys.stdout.isatty()
-    train_loader   = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
-    total_batches  = len(train_loader)
-    heartbeat_every = max(1, total_batches // 10)
     progress_file  = os.path.join(os.path.dirname(args.save_model), "progress.txt") \
                      if args.save_model else None
+    if not _cycling:
+        train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+        total_batches   = len(train_loader)
+        heartbeat_every = max(1, total_batches // 10)
+    _current_file = None
 
     for i in range(start_epoch, args.epochs):
+        if _cycling:
+            epoch_file = _input_files[i % len(_input_files)]
+            if epoch_file != _current_file:
+                _current_file   = epoch_file
+                args.input      = epoch_file
+                args.cache_file = os.path.splitext(epoch_file)[0] + '.cache'
+                dbg_output(f"Input [{i % len(_input_files) + 1}/{len(_input_files)}]: {epoch_file}")
+                dIn             = DataInput.DataInput()
+                train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+                total_batches   = len(train_loader)
+                heartbeat_every = max(1, total_batches // 10)
         dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
         total_loss  = 0.0
         num_batches = 0
@@ -186,7 +210,13 @@ while True:
 
             infOutputs = transformer.forward(infInputs)
 
-            nextIdx = infOutputs[0, -1, :].argmax().item()
+            logits = infOutputs[0, -1, :]
+            unk_idx = dIn.wordDict.get('<unk>', -1)
+            if unk_idx >= 0:
+                logits[unk_idx] = float('-inf')
+            top_logits, top_indices = torch.topk(logits, 40)
+            probs = torch.softmax(top_logits, dim=-1)
+            nextIdx = top_indices[torch.multinomial(probs, 1).item()].item()
             nextWord = dIn.indicesToTokens([nextIdx])[0]
             generated.append(nextWord)
 

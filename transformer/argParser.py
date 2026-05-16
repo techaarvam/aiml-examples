@@ -16,6 +16,7 @@ def parse_args():
     parser.add_argument('--verbosity', type=int, default=1, help='Debug verbosity level (1=output, 2=error, 3=warn, 4=debug, 5=info)')
     parser.add_argument('--output_type', type=str, default='vecs', choices=['indices', 'vecs'], help='Output type: indices (linear projection to vocab, crossentropy loss) or vecs (linear projection to vecDims-1, MSE loss)')
     parser.add_argument('--input', type=str, default=None, help='Path to input text file (required for training)')
+    parser.add_argument('--input_list', type=str, default=None, help='Comma-separated input files or path to a JSON file listing them. Files are cycled across epochs.')
     parser.add_argument('--vocab_file', type=str, default='vocab.json', help='Path to save/load vocabulary JSON')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     parser.add_argument('--model_file', type=str, default=None, help='Path to load a saved model')

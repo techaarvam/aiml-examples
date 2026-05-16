@@ -131,6 +131,22 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 |------------|-------|------|
 | 10% | 65,204 | 4.3195 |
 | 20% | 130,408 | 4.3180 |
+| 30% | 195,612 | 4.3174 |
+| 40% | 260,816 | 4.3168 |
+| 50% | 326,020 | 4.3163 |
+| 60% | 391,224 | 4.3157 |
+| 70% | 456,428 | 4.3150 |
+| 80% | 521,632 | 4.3142 |
+| 90% | 586,836 | 4.3134 |
+| 100% | 652,040 | 4.3126 |
+| **Epoch 3 final** | — | **4.3126** |
+
+### Loss Log — Local Epoch 4 (lr=0.0003, input: wikitext103.txt)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 65,204 | 4.3032 |
+| 20% | 130,408 | 4.3027 |
+| 30% | 195,612 | 4.3019 |
 
 ### BTM Round 1 — Branch-Train-Merge (May 2026)
 
@@ -165,8 +181,22 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 python runner.py runs.toml btm --epochs 3 --cache_file raw_data/data.cache
 ```
 
-**Loss at start of branch training (new distribution: Wiki+OWT)**
-All 4 branches: ~7.2
+**Loss log — branch training (new distribution: Wiki+OWT)**
+| Branch | Data slice | 10% loss | Notes |
+|--------|------------|----------|-------|
+| A | epoch_3.txt | 6.7706 | |
+| B | epoch_4.txt | 6.7381 | |
+| C | epoch_5.txt | 6.7159 | |
+| D | epoch_6.txt | 6.7500 | machine died, restarted; first data point delayed |
+
+### Loss Log — Sequential Post-BTM (epoch_7.txt through epoch_10.txt, lr=0.0003)
+Starting from merged_btm_round1.pth
+
+| Epoch | Checkpoint | Batch | Loss |
+|-------|------------|-------|------|
+| 7 | 10% | 65,131 | 5.4560 |
+| 7 | 20% | 130,262 | 5.2921 |
+| 7 | 30% | 195,393 | 5.2135 |
 
 ---
 

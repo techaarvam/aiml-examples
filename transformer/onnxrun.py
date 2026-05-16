@@ -55,7 +55,13 @@ while True:
 
         logits = sess.run(["logits"], {"input": infInputs_np})[0]  # [1, seq_len, vocab_size]
 
-        nextIdx = logits[0, -1, :].argmax()
+        logits_t = torch.tensor(logits[0, -1, :])
+        unk_idx = dIn.wordDict.get('<unk>', -1)
+        if unk_idx >= 0:
+            logits_t[unk_idx] = float('-inf')
+        top_logits, top_indices = torch.topk(logits_t, 40)
+        probs = torch.softmax(top_logits, dim=-1)
+        nextIdx = top_indices[torch.multinomial(probs, 1).item()].item()
         nextWord = dIn.indicesToTokens([nextIdx])[0]
         generated.append(nextWord)
 

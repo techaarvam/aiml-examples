@@ -162,11 +162,24 @@
       const results = await session.run({ input: inputTensor });
       const logits = results.logits.data; // Float32Array [1 * 63 * vocabSize]
 
-      // Argmax over last token position
+      // Top-k sampling, unk filtered
       const base = (seqLen - 1) * vocabSize;
-      let maxIdx = 0, maxVal = logits[base];
-      for (let i = 1; i < vocabSize; i++) {
-        if (logits[base + i] > maxVal) { maxVal = logits[base + i]; maxIdx = i; }
+      const unkIdx = vocab['<unk>'] !== undefined ? vocab['<unk>'] : -1;
+      const pairs = [];
+      for (let i = 0; i < vocabSize; i++) {
+        if (i === unkIdx) continue;
+        pairs.push([logits[base + i], i]);
+      }
+      pairs.sort((a, b) => b[0] - a[0]);
+      const top = pairs.slice(0, 40);
+      const maxLogit = top[0][0];
+      const exps = top.map(([v]) => Math.exp(v - maxLogit));
+      const sum = exps.reduce((a, b) => a + b, 0);
+      const probs = exps.map(e => e / sum);
+      let r = Math.random(), cumul = 0, maxIdx = top[0][1];
+      for (let i = 0; i < probs.length; i++) {
+        cumul += probs[i];
+        if (r < cumul) { maxIdx = top[i][1]; break; }
       }
 
       const nextWord = reverseVocab[maxIdx] || '<unk>';
