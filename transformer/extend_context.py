@@ -24,7 +24,11 @@ def extend_context(input_path, output_path, new_window):
         align_corners=True,
     ).squeeze(0).T                                  # [new_window, vecDims]
 
-    new_state = {k: v for k, v in state.items() if 'mask' not in k}
+    new_mask = torch.triu(torch.ones(new_window - 1, new_window - 1), diagonal=1).bool()
+    new_state = dict(state)
+    for k in state:
+        if 'mask' in k:
+            new_state[k] = new_mask
     new_state["posEmbedding.weight"] = new_pos
 
     epoch = ckpt.get("epoch", 0) if isinstance(ckpt, dict) else 0
