@@ -147,6 +147,11 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 10% | 65,204 | 4.3032 |
 | 20% | 130,408 | 4.3027 |
 | 30% | 195,612 | 4.3019 |
+| 40% | 260,816 | 4.3011 |
+| 50% | 326,020 | 4.3003 |
+| 60% | 391,224 | 4.2996 |
+| 70% | 456,428 | 4.2989 |
+| 80% | 521,632 | 4.2982 |
 
 ### BTM Round 1 — Branch-Train-Merge (May 2026)
 
@@ -197,6 +202,12 @@ Starting from merged_btm_round1.pth
 | 7 | 10% | 65,131 | 5.4560 |
 | 7 | 20% | 130,262 | 5.2921 |
 | 7 | 30% | 195,393 | 5.2135 |
+| 7 | 40% | 260,524 | 5.1652 |
+| 7 | 50% | 325,655 | 5.1321 |
+| 7 | 60% | 390,786 | 5.1076 |
+| 7 | 70% | 455,917 | 5.0891 |
+| 7 | 80% | 521,048 | 5.0745 |
+| 7 | 90% | 586,179 | 5.0627 |
 
 ---
 
@@ -284,6 +295,7 @@ Discovered that large batch sizes mean fewer gradient steps per epoch, which slo
 | Loss scaling with model size/depth | Scaling Laws for Neural Language Models | Kaplan et al., OpenAI | 2020 |
 | Pre-LN vs Post-LN training stability | On Layer Normalization in the Transformer Architecture | Xiong et al. | 2020 |
 | Compute-optimal training (tokens per param) | Training Compute-Optimal Large Language Models | Hoffmann et al., DeepMind | 2022 |
+| Progressive context extension via positional interpolation | Extending Context Window of Large Language Models via Positional Interpolation | Chen et al., Meta | 2023 |
 | Federated averaging of model weights | Communication-Efficient Learning of Deep Networks from Decentralized Data (FedAvg) | McMahan et al., Google | 2017 |
 | Weight averaging improves generalization | Model Soups: Averaging Weights of Fine-tuned Models Improves Accuracy | Wortsman et al. | 2022 |
 | Parallel training on data slices + merge | Branch-Train-Merge: Embarrassingly Parallel Training of Expert Language Models | Li et al., Meta | 2022 |
