@@ -52,11 +52,13 @@ checkpoint = None
 if args.model_file:
     checkpoint = torch.load(args.model_file, map_location=common.device)
     if isinstance(checkpoint, dict) and 'model' in checkpoint:
-        transformer.load_state_dict(checkpoint['model'])
+        state_dict = {k: v for k, v in checkpoint['model'].items() if 'mask' not in k}
+        transformer.load_state_dict(state_dict)
         transformer = transformer.to(common.dtype)
         dbg_output(f"Loaded model from {args.model_file} (saved after epoch {checkpoint.get('epoch', '?')})")
     else:
-        transformer.load_state_dict(checkpoint)
+        state_dict = {k: v for k, v in checkpoint.items() if 'mask' not in k}
+        transformer.load_state_dict(state_dict)
         transformer = transformer.to(common.dtype)
         checkpoint = None  # old format, no optimizer/epoch state
         dbg_output(f"Loaded model from {args.model_file}")
