@@ -70,7 +70,9 @@ if not args.model_file or args.resume:
         loss_fn = nn.MSELoss()
 
     if args.optimizer == "adam":
-        optimizer = torch.optim.Adam(params=transformer.parameters(), lr=args.lr)
+        # Autograd and gradscale are not used in this code. (AMP is not used)
+        # 1e-4 to help numerical stability in bfloat16
+        optimizer = torch.optim.Adam(params=transformer.parameters(), lr=args.lr, eps=1e-4)
     else:
         optimizer = torch.optim.SGD(params=transformer.parameters(), lr=args.lr)
 
@@ -130,7 +132,7 @@ if not args.model_file or args.resume:
 
             optimizer.zero_grad()
             output = transformer.forward(dInputs)
-
+            assert not output.isnan().any(), f"NaN in forward pass: max={output.abs().max()}"
             if args.output_type == "indices":
                 B, S, V = output.shape
                 loss = loss_fn(output.reshape(B * S, V), dTargetIndices.reshape(B * S))
@@ -138,6 +140,7 @@ if not args.model_file or args.resume:
                 loss = loss_fn(output, dLabels[...,:-1])
 
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(transformer.parameters(), 1.0)
             optimizer.step()
 
             total_loss  += loss.item()

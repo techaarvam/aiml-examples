@@ -51,7 +51,7 @@ class Attention(nn.Module):
           # batch_size, num_heads, window_size, window_size @ num_heads, window_size, vecDim works in pytorch, not in maths!
 
         head_dim = self.keys.shape[-1]
-        scores =  Q @ K.transpose(-2,-1) / (head_dim ** 0.5)
+        scores =  (Q @ K.transpose(-2,-1) / (head_dim ** 0.5))
         cur_len = scores.shape[-1]
         if cur_len == self.mask.shape[0]:
             scores.masked_fill_(self.mask, float('-inf'))
