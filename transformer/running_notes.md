@@ -231,10 +231,51 @@ Starting from merged_btm_round1.pth
 | Adam eps | 1e-4 (bfloat16 stability) |
 | grad_clip | 1.0 |
 
-**Loss Log**
+**Loss Log — 3090 (epoch_7.txt)**
 | Checkpoint | Batch | Loss |
 |------------|-------|------|
 | 0.4% | — | 4.9427 |
+| 2.2% | 14,024 | 4.9322 |
+| 3.3% | — | 4.9300 |
+
+---
+
+### Context Extension — w128 adapt run (May 17, 2026)
+
+**Setup**
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | model_epoch7_sequential_w128.pth (posEmbedding interpolated 64→128) |
+| Machine | RTX 5090 32GB |
+| Input | epoch_7_adapt.txt (first 10% of epoch_7.txt, ~54M tokens) |
+| input_list | epoch_7_adapt.txt, epoch_8.txt, epoch_9.txt, epoch_10.txt |
+| window_size | 128 |
+| batch_size | 192 |
+| lr | 0.00003 |
+| float_type | bfloat16 |
+
+**Loss Log — 5090 (epoch_7_adapt.txt)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| start | — | ~4.9 |
+
+---
+
+### Bug fix — vocab mismatch in runner.py / DataInput.py (May 17, 2026)
+
+**Symptoms**
+- 5090 runs showed loss ~8–12 at early batches vs expected ~4.9
+
+**Root cause**
+- `runner.py` set `vocab_file` to run dir path but never copied `vocab.json` there
+- `DataInput.py` found file missing → rebuilt vocab from training data slice → different word→index mapping from model's training vocab
+- On cache load, `DataInput.py` used vocab embedded in cache, ignoring `vocab_file` entirely
+
+**Fix**
+- `runner.py`: copies root `vocab.json` into run dir before training starts (`shutil.copy2`)
+- `DataInput.py`: on cache load, prefers `vocab_file` over cache-embedded vocab when `vocab_file` is set
+
+**BTM/sequential lineage confirmed unaffected** — 3090 runs maintained vocab consistency through cache across all epochs
 
 ---
 
