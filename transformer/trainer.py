@@ -39,7 +39,9 @@ def _resolve_input_files():
 
 _input_files = _resolve_input_files()
 _cycling     = _input_files is not None
-dIn = DataInput.DataInput() if ((args.model_file and not args.resume) or not _cycling) else None
+
+args.input = _input_files[0] if _cycling else args.input
+dIn = DataInput.DataInput()   
 
 transformer = multihead.MultiHead ().to(common.device).to(common.dtype)
 total_params = sum(p.numel() for p in transformer.parameters())
