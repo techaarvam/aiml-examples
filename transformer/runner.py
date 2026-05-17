@@ -14,7 +14,7 @@
 #   python runner.py runs.toml          # list profiles
 # --------------------------------------------------
 
-import sys, os, json, datetime, tomllib
+import sys, os, json, datetime, tomllib, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -80,6 +80,11 @@ vocab_file = os.path.join(run_dir, "vocab.json")
 
 args["save_model"] = save_model
 args["vocab_file"] = vocab_file
+
+# Seed run dir vocab.json from root so DataInput doesn't rebuild from data
+root_vocab = os.path.join(HERE, "vocab.json")
+if os.path.exists(root_vocab):
+    shutil.copy2(root_vocab, vocab_file)
 
 # ── Reproducibility dump ──────────────────────────
 meta = dict(args)
