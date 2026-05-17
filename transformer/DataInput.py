@@ -37,16 +37,18 @@ class DataInput():
         if args.input:
             if args.cache_file and os.path.exists(args.cache_file):
                 data = pickle.load(open(args.cache_file, 'rb'))
-                self.indices   = data['indices']
-                self.wordDict  = data['wordDict']
-                self.vocab     = data['vocab']
-                self.vocabSize = len(self.vocab)
-                common.vocabSize = self.vocabSize
-                common.wordDict  = self.wordDict
+                self.indices = data['indices']
+                if args.vocab_file and os.path.exists(args.vocab_file):
+                    self._load_vocab(args.vocab_file)
+                    dbg_output(f"Loaded cache from {args.cache_file} ({self.vocabSize} words from vocab_file, {len(self.indices):,} tokens)")
+                else:
+                    self.wordDict  = data['wordDict']
+                    self.vocab     = data['vocab']
+                    self.vocabSize = len(self.vocab)
+                    common.vocabSize = self.vocabSize
+                    common.wordDict  = self.wordDict
+                    dbg_output(f"Loaded cache from {args.cache_file} ({self.vocabSize} words, {len(self.indices):,} tokens)")
                 self.vectors = None
-                dbg_output(f"Loaded cache from {args.cache_file} ({self.vocabSize} words, {len(self.indices):,} tokens)")
-                if args.vocab_file:
-                    self.save_vocab(args.vocab_file)
             else:
                 # training mode: tokenize text, then build or reuse vocab
                 f = open(args.input, "r")

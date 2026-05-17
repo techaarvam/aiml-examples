@@ -152,6 +152,9 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 60% | 391,224 | 4.2996 |
 | 70% | 456,428 | 4.2989 |
 | 80% | 521,632 | 4.2982 |
+| 90% | 586,836 | 4.2975 |
+| 100% | 652,040 | 4.2968 |
+| **Epoch 4 final** | — | **4.2968** |
 
 ### BTM Round 1 — Branch-Train-Merge (May 2026)
 
@@ -208,6 +211,30 @@ Starting from merged_btm_round1.pth
 | 7 | 70% | 455,917 | 5.0891 |
 | 7 | 80% | 521,048 | 5.0745 |
 | 7 | 90% | 586,179 | 5.0627 |
+| 7 | 100% | 651,310 | 5.0533 |
+| **7 final** | — | — | **5.0533** |
+
+---
+
+### Context Extension — w128 (May 17, 2026)
+
+**Setup**
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | merged_btm_round1_plus_epoch7.pth (loss 5.0533, w64) |
+| posEmbedding | interpolated 64→128 via extend_context.py |
+| Machine | RTX 3090 24GB (epoch6 machine) |
+| window_size | 128 |
+| batch_size | 160 |
+| lr | 0.00003 |
+| float_type | bfloat16 |
+| Adam eps | 1e-4 (bfloat16 stability) |
+| grad_clip | 1.0 |
+
+**Loss Log**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 0.4% | — | 4.9427 |
 
 ---
 
