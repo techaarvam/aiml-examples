@@ -254,9 +254,10 @@ while True:
             unk_idx = dIn.wordDict.get('<unk>', -1)
             if unk_idx >= 0:
                 logits[unk_idx] = float('-inf')
-            top_logits, top_indices = torch.topk(logits, 40)
-            probs = torch.softmax(top_logits, dim=-1)
+            top_logits, top_indices = torch.topk(logits, 5)
+            probs = torch.softmax(top_logits / 0.7, dim=-1)
             nextIdx = top_indices[torch.multinomial(probs, 1).item()].item()
+            # nextIdx = top_indices[torch.argmax(probs).item()].item()
             nextWord = dIn.indicesToTokens([nextIdx])[0]
             generated.append(nextWord)
 

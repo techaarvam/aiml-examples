@@ -172,8 +172,16 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 |------------|-------|------|
 | 10% | 3,198 | 4.3887 |
 | 20% | 6,396 | 4.1685 |
+| 30% | 9,594 | 4.0718 |
+| 40% | 12,792 | 4.0124 |
+| 50% | 15,990 | 3.9697 |
+| 60% | 19,188 | 3.9360 |
+| 70% | 22,386 | 3.9089 |
+| 80% | 25,584 | 3.8861 |
+| 90% | 28,782 | 3.8664 |
+| **Epoch 6 final** | 31,980 | **3.8488** |
 
-Previous floor (w64 epoch 5): 4.2379 — breached at ~17% into epoch 6.
+Previous floor (w64 epoch 5): 4.2379 — breached at ~17%. Loss 4.0 breached at ~45%. Next step: w128→w256 adapt on cloud (adapt_wiki2.txt).
 
 ### Gradient Checkpointing Experiment (May 2026)
 

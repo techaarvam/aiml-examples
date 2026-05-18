@@ -51,14 +51,14 @@ max_vocab_size = 10000
 # Purpose: meaningful local training — full wiki corpus, float16, ~2.8 hrs/epoch
 # Expected: ~4 nights (8 hrs/night) for 10 epochs
 [high]
-input          = "raw_data/adapt_wiki.txt"
+input          = "raw_data/adapt_wiki2.txt"
 vecDims        = 512
 num_heads      = 8
 num_layers     = 8
-window_size    = 128
-batch_size     = 512
+window_size    = 256
+batch_size     = 16
 epochs         = 100
-lr             = 0.0003
+lr             = 0.00003
 float_type     = "bfloat16"
 max_vocab_size = 50000
 
