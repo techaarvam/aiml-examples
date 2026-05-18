@@ -436,6 +436,64 @@ Each new data slice causes a brief uptick at the start as the model adjusts to n
 
 ---
 
+### Decision: Park w256, continue w128 line (May 18–19, 2026)
+
+**w256 continuation killed**
+Local w256 run from the w128 adapt checkpoint was slow and oscillating — loss jumped up and down without a real cumulative reduction. Root cause: larger context forces the gradient to integrate over 256 positions per prediction; the model had not converged enough to maintain stable representations at that span. Without a dedicated positional interpolation + warm-up step into w256, the optimiser is fighting both a distribution shift and an architecture the model has never seen. Killed at early epochs. Decision: park the local line at w128.
+
+**Final local model: `high_20260518_161520`**
+- window_size: 128, loss **3.8488** (epoch 6, adapt on 1/20th WikiText)
+- ONNX exported and hosted at `vasantharam/aiml-youtube-models` on Hugging Face
+
+---
+
+### w128 Server Continuation (w128_20260518_162121, May 18–19, 2026)
+
+Resumed from the local w128 adapt checkpoint on the server to keep training on the remaining data the local run never saw.
+
+**Config**
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | local w128 adapt (high_20260518_161520, loss 3.8488) |
+| window_size | 128 |
+| batch_size | 512 |
+| lr | 0.001 |
+| float_type | bfloat16 |
+| grad_checkpoint | yes |
+| input_list | epoch_8.txt → epoch_9.txt → epoch_10.txt (cycling, 20 epochs) |
+
+**Data strategy — epochs 7 through 10, then full 9 and 10**
+The local model already trained through epoch_7 (the sequential post-BTM run). The server continuation picks up from epoch_8 onward, cycling through three files:
+
+| Phase | Files | Size per file | Notes |
+|-------|-------|--------------|-------|
+| Initial cycles | epoch_8, epoch_9, epoch_10 | ~52 MB (slices) | same slices used in the prior w256 BTM lineage |
+| Remaining cycles | epoch_9, epoch_10 | 513 MB (full) | uploaded overnight; stale caches deleted so trainer re-indexes |
+
+Upgrading to full epoch_9 and epoch_10 mid-run gives the later cycles ~10× more tokens per file — more signal without restarting.
+
+**Why w128 reduces cleanly where w256 oscillated**
+- Half the context → lower-variance gradient signal per step
+- The model's embeddings and attention patterns were already shaped for 128-token context by the positional interpolation + adapt run
+- w128 continuation is domain adaptation on new data; w256 was asking the model to simultaneously learn extended positional relationships it had never seen
+
+**Early loss log (server, cycling epoch_8/9/10 slices)**
+| Epoch | Progress | Loss |
+|-------|----------|------|
+| 1 | final | ~4.93 |
+| 2 | final | ~4.63 |
+| 3 | 55% | 4.4860 |
+
+Starting loss (~4.93) is higher than the w128 adapt floor (3.85) because epoch_8/9/10 are Wiki+OWT rather than pure WikiText — distribution shift expected. Reduction is steady and cumulative, no oscillation.
+
+**Overnight monitoring**
+Hourly backup script (`server_backup.sh`, PID 3843740) runs through the night:
+- Converts current model.pth → model.onnx on server CPU (`CUDA_VISIBLE_DEVICES=""`, no GPU contention)
+- Pulls model.pth, vocab.json, model.onnx via SCP
+- Saves timestamped checkpoints to `runs/w128_server_bkp/`
+
+---
+
 ### Bug fix — vocab mismatch in runner.py / DataInput.py (May 17, 2026)
 
 **Symptoms**
