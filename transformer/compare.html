@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tech Aarvam · Model Comparison</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: monospace;
+  background: #f5f7fa;
+  color: #2c2c2c;
+  padding: 24px 20px;
+}
+
+header { margin-bottom: 18px; }
+h1 { color: #4a6fa5; font-size: 1.2em; letter-spacing: 0.02em; }
+.subtitle { color: #9aaabf; font-size: 0.76em; margin-top: 3px; }
+
+#vocab-status {
+  font-size: 0.76em;
+  color: #6a7f99;
+  padding: 7px 12px;
+  background: #eaf0f8;
+  border-left: 3px solid #b8cde0;
+  margin-bottom: 18px;
+  transition: border-color 0.3s;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+/* ── Panel ── */
+.panel {
+  background: #ffffff;
+  border: 1px solid #dde6f0;
+  border-radius: 6px;
+  padding: 14px 14px 10px;
+  box-shadow: 0 1px 4px rgba(100,130,170,0.07);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #d4dde8;
+  border: 1px solid #c0ccd8;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.dot.loading { background: #f6c26b; border-color: #f0aa38; }
+.dot.ready   { background: #7ec89a; border-color: #5ab57a; }
+.dot.error   { background: #e88a8a; border-color: #d46060; }
+
+.panel-name { font-size: 0.88em; font-weight: bold; color: #4a6fa5; }
+.panel-meta { font-size: 0.7em; color: #a0b0c4; margin-bottom: 10px; }
+
+/* ── Editor (ghost text overlay) ── */
+:root {
+  --ep: 9px;
+  --ef: 13px;
+  --el: 1.65;
+  --ef-stack: monospace;
+}
+
+.editor-wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+.ghost-layer {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: var(--ep);
+  font-size: var(--ef);
+  font-family: var(--ef-stack);
+  line-height: var(--el);
+  white-space: pre-wrap;
+  word-break: break-word;
+  pointer-events: none;
+  overflow: hidden;
+  border: 1px solid transparent;
+  z-index: 0;
+}
+
+.user-mirror { color: transparent; }
+.ghost-pred  { color: #b0bfcf; }      /* soft blue-gray prediction */
+
+textarea.editor {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  min-height: 78px;
+  background: transparent;
+  color: #2c3e50;
+  border: 1px solid #cdd8e8;
+  border-radius: 4px;
+  padding: var(--ep);
+  font-size: var(--ef);
+  font-family: var(--ef-stack);
+  line-height: var(--el);
+  resize: none;
+  overflow: hidden;
+  outline: none;
+  caret-color: #4a6fa5;
+  transition: border-color 0.15s;
+}
+textarea.editor::placeholder { color: #c8d5e4; }
+textarea.editor:focus { border-color: #7aaad4; box-shadow: 0 0 0 2px #e0edf8; }
+textarea.editor:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.panel-status {
+  font-size: 0.68em;
+  color: #b0bfcf;
+  margin-top: 6px;
+  min-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tech Aarvam · Model Comparison</h1>
+  <div class="subtitle">Sentence completion · type in any panel · grayed text is model prediction</div>
+</header>
+
+<div id="vocab-status">Initialising...</div>
+<div class="grid" id="grid"></div>
+
+<script>
+'use strict';
+
+// ── Configuration ──────────────────────────────────────────────────────────
+const PREDICT_TOKENS = 5;   // number of predicted tokens to show — tune here
+
+const MODELS = [
+  {
+    name:   'Local · w64',
+    desc:   'WikiText-103 · 5 epochs · loss 4.24 · ppl 69',
+    onnx:   'model_local_w64.onnx',
+    seqLen: 63,    // window_size − 1
+  },
+  {
+    name:   'Local · w256',
+    desc:   'WikiText-103 · context extended 64→256 · loss pending',
+    onnx:   'model_local_w256.onnx',
+    seqLen: 255,
+  },
+  {
+    name:   'Server BTM · w256 · output 1',
+    desc:   'Wiki+OWT · BTM lineage · after slice-2 first pass · loss ~4.75',
+    onnx:   'model_server_w256_out1.onnx',
+    seqLen: 255,
+  },
+  {
+    name:   'Server BTM · w256 · output 2',
+    desc:   'Wiki+OWT · BTM lineage · after slice-2 second pass · loss lower',
+    onnx:   'model_server_w256_out2.onnx',
+    seqLen: 255,
+  },
+];
+
+// ── Global state ────────────────────────────────────────────────────────────
+let vocab        = null;
+let reverseVocab = null;
+let vocabSize    = 0;
+let unkIdx       = -1;
+
+const sessions   = new Array(MODELS.length).fill(null);
+const loadState  = new Array(MODELS.length).fill('idle'); // idle|loading|ready|error
+const debounces  = new Array(MODELS.length).fill(null);
+
+// ── Tokenizer — approximate NLTK word_tokenize ──────────────────────────────
+function tokenize(text) {
+  text = text.toLowerCase();
+  text = text.replace(/n't/g,                " n't");
+  text = text.replace(/'s\b/g,               " 's");
+  text = text.replace(/'re\b/g,              " 're");
+  text = text.replace(/'ve\b/g,              " 've");
+  text = text.replace(/'ll\b/g,              " 'll");
+  text = text.replace(/'d\b/g,               " 'd");
+  text = text.replace(/'m\b/g,               " 'm");
+  text = text.replace(/``/g,                 ' `` ');
+  text = text.replace(/''/g,                 " '' ");
+  text = text.replace(/([.,!?;:()\[\]{}"'])/g, ' $1 ');
+  return text.split(/\s+/).filter(t => t.length > 0);
+}
+
+// ── Build panels ────────────────────────────────────────────────────────────
+function buildPanels() {
+  const grid = document.getElementById('grid');
+
+  MODELS.forEach((m, idx) => {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.innerHTML = `
+      <div class="panel-header">
+        <div class="dot" id="dot${idx}"></div>
+        <span class="panel-name">${m.name}</span>
+      </div>
+      <div class="panel-meta">${m.desc} &nbsp;·&nbsp; ctx ${m.seqLen + 1}</div>
+      <div class="editor-wrap">
+        <div class="ghost-layer" id="ghost${idx}" aria-hidden="true"></div>
+        <textarea class="editor" id="ta${idx}"
+          placeholder="Start typing…"
+          spellcheck="false"
+          disabled></textarea>
+      </div>
+      <div class="panel-status" id="st${idx}">waiting for vocab…</div>
+    `;
+    grid.appendChild(panel);
+
+    const ta    = document.getElementById(`ta${idx}`);
+    const ghost = document.getElementById(`ghost${idx}`);
+
+    ta.addEventListener('focus', () => {
+      if (loadState[idx] === 'idle') loadModel(idx);
+    });
+
+    ta.addEventListener('input', () => {
+      autoExpand(ta, ghost);
+      clearGhost(idx, ta.value);
+      scheduleInference(idx);
+    });
+  });
+}
+
+function autoExpand(ta, ghost) {
+  ta.style.height    = 'auto';
+  ta.style.height    = ta.scrollHeight + 'px';
+  ghost.style.height = ta.scrollHeight + 'px';
+}
+
+function clearGhost(idx, userText) {
+  setGhost(idx, userText, '');
+}
+
+// ── Vocabulary ──────────────────────────────────────────────────────────────
+async function loadVocab() {
+  const statusEl = document.getElementById('vocab-status');
+  try {
+    ort.env.wasm.numThreads = 1;
+
+    const resp = await fetch('vocab.json');
+    if (!resp.ok) throw new Error('vocab.json not found — serve from the transformer directory');
+    vocab        = await resp.json();
+    vocabSize    = Object.keys(vocab).length;
+    reverseVocab = Object.fromEntries(Object.entries(vocab).map(([w, i]) => [i, w]));
+    unkIdx       = vocab['<unk>'] !== undefined ? vocab['<unk>'] : -1;
+
+    statusEl.textContent    = `Vocab ready — ${vocabSize.toLocaleString()} words · click a panel to load its model`;
+    statusEl.style.borderColor = '#66bb6a';
+
+    MODELS.forEach((_, idx) => {
+      document.getElementById(`ta${idx}`).disabled = false;
+      setStatus(idx, 'click to load model');
+    });
+
+  } catch (e) {
+    statusEl.style.borderColor = '#ef5350';
+    statusEl.textContent = `Error: ${e.message}`;
+  }
+}
+
+// ── Lazy model loading ───────────────────────────────────────────────────────
+async function loadModel(idx) {
+  if (loadState[idx] !== 'idle') return;
+  loadState[idx] = 'loading';
+  setDot(idx, 'loading');
+  setStatus(idx, `loading ${MODELS[idx].onnx}…`);
+
+  try {
+    sessions[idx]  = await ort.InferenceSession.create(MODELS[idx].onnx, {
+      executionProviders: ['wasm']
+    });
+    loadState[idx] = 'ready';
+    setDot(idx, 'ready');
+    setStatus(idx, 'ready');
+
+    // Run inference if there's already text in the box
+    const ta = document.getElementById(`ta${idx}`);
+    if (ta.value.trim()) scheduleInference(idx);
+
+  } catch (e) {
+    loadState[idx] = 'error';
+    setDot(idx, 'error');
+    setStatus(idx, `error: ${e.message}`);
+    console.error(`Model ${idx} load error:`, e);
+  }
+}
+
+// ── Inference ────────────────────────────────────────────────────────────────
+function scheduleInference(idx) {
+  clearTimeout(debounces[idx]);
+  debounces[idx] = setTimeout(() => runInference(idx), 280);
+}
+
+async function runInference(idx) {
+  if (loadState[idx] !== 'ready' || !vocab) return;
+
+  const ta      = document.getElementById(`ta${idx}`);
+  const text    = ta.value;
+
+  if (!text.trim()) {
+    setGhost(idx, text, '');
+    return;
+  }
+
+  const seqLen  = MODELS[idx].seqLen;
+  const tokens  = tokenize(text);
+
+  // Right-align into context window, left-pad zeros
+  const slice   = tokens.slice(-seqLen);
+  const ids     = new Array(seqLen).fill(0);
+  const offset  = seqLen - slice.length;
+  for (let i = 0; i < slice.length; i++) {
+    ids[offset + i] = vocab[slice[i]] !== undefined ? vocab[slice[i]] : 0;
+  }
+
+  const window  = [...ids];
+  const words   = [];
+
+  setStatus(idx, 'predicting…');
+
+  for (let step = 0; step < PREDICT_TOKENS; step++) {
+    const tensor = new ort.Tensor(
+      'int64',
+      BigInt64Array.from(window.map(BigInt)),
+      [1, seqLen]
+    );
+
+    let results;
+    try {
+      results = await sessions[idx].run({ input: tensor });
+    } catch (e) {
+      setStatus(idx, `inference error: ${e.message}`);
+      return;
+    }
+
+    const logits = results.logits.data;   // Float32Array [1 * seqLen * vocabSize]
+    const base   = (seqLen - 1) * vocabSize;
+
+    // Greedy argmax, skip <unk>
+    let bestIdx = 0, bestVal = -Infinity;
+    for (let i = 0; i < vocabSize; i++) {
+      if (i === unkIdx) continue;
+      if (logits[base + i] > bestVal) { bestVal = logits[base + i]; bestIdx = i; }
+    }
+
+    words.push(reverseVocab[bestIdx] || '');
+    window.push(bestIdx);
+    window.shift();
+  }
+
+  setGhost(idx, text, ' ' + words.join(' '));
+  setStatus(idx, `${PREDICT_TOKENS} tokens predicted`);
+}
+
+// ── Ghost text & helpers ─────────────────────────────────────────────────────
+function setGhost(idx, userText, predText) {
+  const esc = s => s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  document.getElementById(`ghost${idx}`).innerHTML =
+    `<span class="user-mirror">${esc(userText)}</span>` +
+    `<span class="ghost-pred">${esc(predText)}</span>`;
+}
+
+function setDot(idx, cls) {
+  document.getElementById(`dot${idx}`).className = `dot ${cls}`;
+}
+
+function setStatus(idx, msg) {
+  document.getElementById(`st${idx}`).textContent = msg;
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+buildPanels();
+loadVocab();
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@ from torch import nn
 from attention import *
 import DataInput
 import common
+from torch.utils.checkpoint import checkpoint as ckpt
 
 class MultiHead (nn.Module):
     def __init__(self):
@@ -53,6 +54,19 @@ class MultiHead (nn.Module):
         elif (args.output_type == "vecs"):
             self.outputLinear = nn.Linear(vecDims, vecDims-1)
         
+    def _layer_forward(self, X, layer):
+        normedX = self.normalize(X, self.norm1[layer],
+            (self.learnedMeanShift1[layer], self.learnedStdScale1[layer]) if args.use_custom_norm else None)
+        attentionOutput = normedX.unsqueeze(1).expand(-1, args.num_heads, -1, common.vecDims)
+        attentionOutput = self.attentionHeads[layer].forward(attentionOutput)
+        attentionOutput = attentionOutput.permute(0, 2, 1, 3).flatten(start_dim=2)
+        attentionOutput = attentionOutput @ self.Wo[layer]
+        X = X + attentionOutput
+        normedX = self.normalize(X, self.norm2[layer],
+            (self.learnedMeanShift2[layer], self.learnedStdScale2[layer]) if args.use_custom_norm else None)
+        X = X + self.mlp[layer](normedX)
+        return X
+
     def normalize (self, X, norm, learnedParams=None):
         # Instead of using nn.LayerNorm, using mean/std operations,
         # since this is a learning project and the goal is to break
@@ -79,32 +93,11 @@ class MultiHead (nn.Module):
         else:
             X = self.embedding(X) + self.posEmbedding(positions)  # X is long indices
         for layer in range (0, args.num_layers):
-            # A few changes from the previous version
-            #  1. normalize before the output weight operation.
-            #  2. Add the residuals and normalize again before the FFN
-            #  3. Add the residuals insted of the non-standard concatenation that
-            #      was done in the previous version.
-            #  4. Do an expanding FFN with GeLU insted of the previous 2d <-> d.
-            #      change to d <-> 4d <-> d
-
-            normedX = self.normalize(X, self.norm1[layer],
-                (self.learnedMeanShift1[layer], self.learnedStdScale1[layer]) if args.use_custom_norm else None)
-
-            # batch_size dim in expand is kept as -1 mindful of the last batch which may not be batch_size.
-            attentionOutput = normedX.unsqueeze(1).expand(-1, args.num_heads, -1, common.vecDims) 
-
-            attentionOutput = self.attentionHeads[layer].forward ( attentionOutput)
-            # attentionOutput is batch_size, num_heads, window_size, vecDim
-            # lets convert this to batch_size, window_size, num_heads * vecDim, so Wo (output weigts can do a weighted add)
-            attentionOutput = attentionOutput.permute(0,2,1,3).flatten(start_dim=2)
-            attentionOutput = attentionOutput @ self.Wo[layer]
-
-            X = X + attentionOutput
-
-            normedX = self.normalize(X, self.norm2[layer],
-                (self.learnedMeanShift2[layer], self.learnedStdScale2[layer]) if args.use_custom_norm else None)
-
-            X = X + self.mlp[layer] ( normedX )
+            if args.grad_checkpoint and self.training:
+                fn = lambda X, l=layer: self._layer_forward(X, l)
+                X = ckpt(fn, X, use_reentrant=False)
+            else:
+                X = self._layer_forward(X, layer)
 
         if (args.output_type == "indices"):
             # Its nice that both the mlp above and the outputLinear below are broadcasting correctly.

@@ -63,6 +63,41 @@ if args.model_file:
         checkpoint = None  # old format, no optimizer/epoch state
         dbg_output(f"Loaded model from {args.model_file}")
 
+if args.validate:
+    import math
+    if not args.model_file:
+        print("ERROR: --validate requires --model_file")
+        sys.exit(1)
+    val_loss_fn  = nn.CrossEntropyLoss()
+    val_loader   = DataLoader(dIn, batch_size=args.batch_size, shuffle=False)
+    total_batches = len(val_loader)
+    heartbeat    = max(1, total_batches // 10)
+    total_loss   = 0.0
+    num_batches  = 0
+    transformer.eval()
+    print(f"dataset : {args.input}")
+    print(f"model   : {args.model_file}")
+    print(f"batches : {total_batches}")
+    with torch.no_grad():
+        for arg1, arg2, arg3 in val_loader:
+            if args.embedding_type == "glove-fixed":
+                dInputs        = arg1.to(common.device).to(common.dtype)
+                dTargetIndices = arg3.to(common.device)
+            else:
+                dInputs        = arg1.to(common.device)
+                dTargetIndices = arg3.to(common.device)
+            output = transformer.forward(dInputs)
+            B, S, V = output.shape
+            loss = val_loss_fn(output.float().reshape(B * S, V), dTargetIndices.reshape(B * S))
+            total_loss  += loss.item()
+            num_batches += 1
+            if num_batches % heartbeat == 0:
+                print(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+    mean_loss = total_loss / num_batches
+    print(f"loss    : {mean_loss:.4f}")
+    print(f"ppl     : {math.exp(mean_loss):.2f}")
+    sys.exit(0)
+
 if not args.model_file or args.resume:
     if args.output_type == "indices":
         loss_fn = nn.CrossEntropyLoss()

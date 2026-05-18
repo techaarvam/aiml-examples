@@ -33,6 +33,9 @@ def parse_args():
     parser.add_argument('--start_epoch', type=int, default=None, help='Manually override starting epoch when resuming (1-based). Required for old-format checkpoints.')
     parser.add_argument('--run_dir', type=str, default=None, help='Output directory for this run (default: runs/YYYYMMDD_HHMMSS). Set by runner.py.')
     parser.add_argument('--cache_file', type=str, default=None, help='Path to pickle cache of tokenized indices+vocab (skips word_tokenize on subsequent runs)')
+    parser.add_argument('--validate', action='store_true', default=False, help='Validation mode: run forward pass over --input, print cross-entropy loss and perplexity, then exit')
+    parser.add_argument('--grad_checkpoint', action='store_true', default=False,
+        help='Enable gradient checkpointing per transformer layer (saves activation memory, costs ~30% extra compute)')
     return parser.parse_args()
 
 args = parse_args()

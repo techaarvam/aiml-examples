@@ -1,6 +1,6 @@
 # Transformer Model Experiments - Running Notes
 
-## Run 3 — Architecture Overhaul: Standard Pre-Norm Transformer (May 13–14, 2026)
+## Run 3 — Architecture Overhaul: Standard Pre-Norm Transformer (May 13–18, 2026)
 
 ### Architecture Changes from Run 2
 - **Pre-norm** (LayerNorm before attention and FFN, not after)
@@ -156,7 +156,7 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 100% | 652,040 | 4.2968 |
 | **Epoch 4 final** | — | **4.2968** |
 
-### Loss Log — Local Epoch 5 (lr=0.0003, input: wikitext103.txt, in progress)
+### Loss Log — Local Epoch 5 (lr=0.0003, input: wikitext103.txt)
 | Checkpoint | Batch | Loss |
 |------------|-------|------|
 | 10% | 65,204 | 4.2407 |
@@ -165,6 +165,27 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 40% | 260,816 | 4.2383 |
 | 50% | 326,020 | 4.2381 |
 | 60% | 391,224 | 4.2380 |
+| **Epoch 5 final** | — | **4.2379** |
+
+### Loss Log — Local w128 Adapt (epoch 6, lr=0.0003, input: adapt_wiki.txt, run high_20260518_161520)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 3,198 | 4.3887 |
+| 20% | 6,396 | 4.1685 |
+
+Previous floor (w64 epoch 5): 4.2379 — breached at ~17% into epoch 6.
+
+### Gradient Checkpointing Experiment (May 2026)
+
+Measured at batch 1000 on RTX 5070, same hyperparameters as `high_20260517_170921`.
+
+| | Without (`--grad_checkpoint`) | With (`--grad_checkpoint`) |
+|---|---|---|
+| Throughput | 8.0 batch/s | 6.7 batch/s |
+| VRAM (steady state) | 10,776 MB | 5,834 MB |
+| Delta | — | −16% compute, −46% VRAM |
+
+Reference run: `high_20260517_170921_chkpt`. Activation memory nearly halved because the 4×d FFN expansion dominates activation storage per layer and is recomputed rather than retained. Compute cost is modest. `--grad_checkpoint` will be used for all subsequent context-extension runs (w128, w256) where longer sequences would otherwise push VRAM higher.
 
 ### BTM Round 1 — Branch-Train-Merge (May 2026)
 

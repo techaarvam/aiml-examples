@@ -94,7 +94,7 @@ with open(os.path.join(run_dir, "args.json"), "w") as f:
     json.dump(meta, f, indent=2)
 
 # ── Build trainer command ─────────────────────────
-BOOL_FLAGS = {"use_custom_norm", "resume", "quantize"}
+BOOL_FLAGS = {"use_custom_norm", "resume", "quantize", "grad_checkpoint", "validate"}
 
 def build_cmd(overrides=None):
     a = dict(args)
