@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" font-family="system-ui,sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="480" height="480" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="240" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f172a">Local Training · WikiText-103 · w64</text>
+  <text x="240" y="46" text-anchor="middle" font-size="11" fill="#64748b">RTX 5070 · 652k batches/epoch · lr 0.0003</text>
+
+  <!-- Epoch 1 -->
+  <rect x="50" y="58" width="380" height="54" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="240" y="79" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epoch 1</text>
+  <text x="240" y="98" text-anchor="middle" fill="#374151">loss 10.82 → ~4.45  ·  ppl 50,011 → ~86</text>
+
+  <line x1="240" y1="112" x2="240" y2="130" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Epoch 2 -->
+  <rect x="50" y="130" width="380" height="54" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="240" y="151" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epoch 2</text>
+  <text x="240" y="170" text-anchor="middle" fill="#374151">loss ~4.45 → 4.34  ·  ppl ~86 → 77</text>
+
+  <line x1="240" y1="184" x2="240" y2="202" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Epoch 3 -->
+  <rect x="50" y="202" width="380" height="54" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="240" y="223" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epoch 3</text>
+  <text x="240" y="242" text-anchor="middle" fill="#374151">loss 4.34 → ~4.30  ·  ppl 77 → ~74</text>
+
+  <line x1="240" y1="256" x2="240" y2="274" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Epoch 4 -->
+  <rect x="50" y="274" width="380" height="54" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="240" y="295" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epoch 4</text>
+  <text x="240" y="314" text-anchor="middle" fill="#374151">loss ~4.30 → 4.30  ·  ppl ~74 → 73</text>
+
+  <line x1="240" y1="328" x2="240" y2="346" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Epoch 5 -->
+  <rect x="50" y="346" width="380" height="54" rx="6" fill="#1e40af" stroke="#1e3a8a" stroke-width="1.5"/>
+  <text x="240" y="367" text-anchor="middle" font-size="13" font-weight="600" fill="white">Epoch 5  ·  STOP</text>
+  <text x="240" y="386" text-anchor="middle" fill="#bfdbfe">loss 4.30 → 4.24  ·  ppl 73 → 69</text>
+
+  <!-- final loss callout -->
+  <text x="240" y="432" text-anchor="middle" font-size="12" fill="#64748b">WikiText floor · single-domain · window 64</text>
+  <text x="240" y="452" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">Final: loss 4.238  ·  ppl 69</text>
+
+</svg>

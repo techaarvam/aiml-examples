@@ -156,6 +156,16 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 100% | 652,040 | 4.2968 |
 | **Epoch 4 final** | — | **4.2968** |
 
+### Loss Log — Local Epoch 5 (lr=0.0003, input: wikitext103.txt, in progress)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 65,204 | 4.2407 |
+| 20% | 130,408 | 4.2392 |
+| 30% | 195,612 | 4.2386 |
+| 40% | 260,816 | 4.2383 |
+| 50% | 326,020 | 4.2381 |
+| 60% | 391,224 | 4.2380 |
+
 ### BTM Round 1 — Branch-Train-Merge (May 2026)
 
 **Setup**
@@ -216,6 +226,33 @@ Starting from merged_btm_round1.pth
 
 ---
 
+### Sliding-slice strategy for long runs (May 17, 2026)
+
+Motivation: 5090 rental has ~24 hours remaining. A full epoch at w256 takes ~1800 min; 1/10th slices take ~180 min each, allowing multiple cycles of all four data files within the rental window.
+
+input_list cycles through: epoch_7_adapt.txt, epoch_8.txt, epoch_9.txt, epoch_10.txt
+Each file is 1/10th of its original (~51–54MB, ~54k–79k batches at w256).
+epoch_7_adapt.txt (and epoch_8/9/10 slices) are manually advanced to the next 10% slice each time the run loops back, so every cycle sees different content.
+
+| Cycle | epoch_7_adapt slice |
+|-------|-------------------|
+| 1 | lines 1 – 10% |
+| 2 | lines 10% – 20% |
+| 3 | lines 20% – 30% |
+| … | … |
+
+Cache for each file is deleted each time its slice is rotated so it rebuilds against the new content.
+
+The sliding window on smaller slices is our own practical approach to fit meaningful training cycles within the rental window. Similar ideas may exist in curriculum learning and data-streaming literature — to be read further.
+
+**Potentially related references (to read)**
+| Topic | Paper | Authors | Year |
+|-------|-------|---------|------|
+| Ordered data subsets during training | Curriculum Learning | Bengio et al. | 2009 |
+| Training on data shards without full-epoch passes | Language Models are Few-Shot Learners (GPT-3) | Brown et al., OpenAI | 2020 |
+
+---
+
 ### Context Extension — w128 (May 17, 2026)
 
 **Setup**
@@ -268,6 +305,105 @@ Starting from merged_btm_round1.pth
 | 90% | 48,762 | 4.9260 |
 | 100% | 54,180 | 4.9257 |
 | **Epoch final** | — | **4.9257** |
+
+---
+
+### Context Extension — w256 adapt run (May 17, 2026)
+
+**Setup**
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | model_epoch7_sequential_w128_adapted.pth (loss 4.9257, w128) |
+| posEmbedding | interpolated 128→256 via extend_context.py |
+| Machine | RTX 5090 32GB |
+| Input | epoch_7_adapt.txt → epoch_8.txt → epoch_9.txt → epoch_10.txt |
+| window_size | 256 |
+| batch_size | 192 |
+| lr | 0.00003 |
+| float_type | bfloat16 |
+
+**Loss Log — 5090 (epoch_7_adapt.txt, 78,812 batches total)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,881 | 4.9022 |
+| 20% | 15,762 | 4.8338 |
+| 30% | 23,643 | 4.8018 |
+| 40% | 31,524 | 4.7813 |
+| 50% | 39,405 | 4.7664 |
+| 60% | 47,286 | 4.7548 |
+| 70% | 55,167 | 4.7451 |
+| 80% | 63,048 | 4.7369 |
+| 90% | 70,929 | 4.7298 |
+| 100% | 78,810 | 4.7235 |
+| **Epoch final** | — | **4.7235** |
+
+**Loss Log — 5090 (epoch_8 slice 1, 78,087 batches)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,808 | 4.8519 |
+| 20% | 15,616 | 4.8306 |
+| 30% | 23,424 | 4.8166 |
+| 40% | 31,232 | 4.8057 |
+| 50% | 39,040 | 4.7969 |
+| 60% | 46,848 | 4.7895 |
+| 70% | 54,656 | 4.7830 |
+| 80% | 62,464 | 4.7772 |
+| 90% | 70,272 | 4.7718 |
+| **Epoch final** | — | **4.7670** |
+
+Each new data slice causes a brief uptick at the start as the model adjusts to new content, then resumes descent — this is expected and consistent across all slice transitions.
+
+**Loss Log — 5090 (epoch_9 slice 1, 78,174 batches)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,817 | 4.8442 |
+| 20% | 15,634 | 4.8245 |
+| 30% | 23,451 | 4.8118 |
+| 40% | 31,268 | 4.8022 |
+| 50% | 39,085 | 4.7945 |
+| 60% | 46,902 | 4.7877 |
+| 70% | 54,719 | 4.7819 |
+| 80% | 62,536 | 4.7765 |
+| 90% | 70,353 | 4.7718 |
+| **Epoch final** | — | **4.7674** |
+
+**Loss Log — 5090 (epoch_10 slice 1, 78,269 batches)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,826 | 4.8438 |
+| 20% | 15,652 | 4.8254 |
+| 30% | 23,478 | 4.8136 |
+| 40% | 31,304 | 4.8046 |
+| 50% | 39,130 | 4.7971 |
+| 60% | 46,956 | 4.7908 |
+| 70% | 54,782 | 4.7852 |
+| 80% | 62,608 | 4.7803 |
+| 90% | 70,434 | 4.7758 |
+| **Epoch final** | — | **4.7717** |
+
+**Loss Log — 5090 (epoch_7_adapt slice 2, 2nd loop, 78,784 batches)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,878 | 4.8219 |
+| 20% | 15,756 | 4.8043 |
+| 30% | 23,634 | 4.7929 |
+| 40% | 31,512 | 4.7844 |
+| 50% | 39,390 | 4.7774 |
+| 60% | 47,268 | 4.7715 |
+| 70% | 55,146 | 4.7662 |
+| 80% | 63,024 | 4.7616 |
+| 90% | 70,902 | 4.7574 |
+| **Epoch final** | — | **4.7535** |
+
+**Loss Log — 5090 (epoch_8 slice 2, 2nd loop, 78,895 batches, in progress)**
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,889 | 4.8352 |
+| 20% | 15,778 | 4.8183 |
+| 30% | 23,667 | 4.8073 |
+| 40% | 31,556 | 4.7990 |
+| 50% | 39,445 | 4.7923 |
+| 60% | 47,334 | 4.7865 |
 
 ---
 
@@ -359,6 +495,77 @@ The training loop is identical.
 
 ### Learnings
 Discovered that large batch sizes mean fewer gradient steps per epoch, which slows convergence. One approach tried was scaling LR proportionally with batch size (`lr = base_lr × batch/reference_batch`), but experiments showed this alone did not close the gap — gradient step count remains the dominant factor. Tuning LR by watching live loss turned out to be unreliable and noisy; the standard approach for transformers is warmup + cosine decay. The original transformer paper (2017) includes warmup, and BERT and GPT-2 also use LR warmup. PyTorch's `CosineAnnealingLR` decays LR using `lr = eta_min + 0.5 × (lr_max - eta_min) × (1 + cos(π × t / T_max))`. Next experiment: properly implement LR scaling with warmup + cosine decay and measure impact.
+
+### Training Diagrams
+
+**BTM Lineage**
+![BTM Training Lineage](btm_lineage.svg)
+
+**Local WikiText-103 Run**
+![Local Training](wiki_local.svg)
+
+### Training Data Volume — BTM Lineage
+
+† Epochs 3–6 ran in parallel on 4 separate machines; each branch saw one unique epoch file before weight-averaging at merge. Adapt slices are subsets of epoch_7 already seen in full during the sequential epoch — no new unique content. Stable pass repeats the same slices as slice-next — no new unique content.
+
+| Net Epoch | Step | Domain | New unique data | Cumul. unique | End Loss |
+|----------:|------|--------|----------------:|--------------:|--------:|
+| 1 | WikiText-103 | wiki | 515 MB | 515 MB | ~4.45 |
+| 2 | WikiText-103 (repeat) | wiki | — | 515 MB | 4.34 |
+| 3 † | BTM Branch A — epoch_3 | wiki+owt | 513 MB | 1.03 GB | — |
+| 4 † | BTM Branch B — epoch_4 | wiki+owt | 513 MB | 1.54 GB | — |
+| 5 † | BTM Branch C — epoch_5 | wiki+owt | 513 MB | 2.05 GB | — |
+| 6 † | BTM Branch D — epoch_6 · **merge** | wiki+owt | 512 MB | 2.56 GB | ~5.05 |
+| 7 | Epoch 7 sequential | wiki+owt | 514 MB | 3.07 GB | 5.05 |
+| 7.1 | w64→w128 adapt · epoch_7 1/10th (repeat) | wiki+owt | — | 3.07 GB | 4.93 |
+| 7.2 | w128→w256 adapt · epoch_7 1/10th (repeat) | wiki+owt | — | 3.07 GB | 4.72 |
+| 7.3 | Epoch 8 slice 1 | wiki+owt | ~51 MB | 3.12 GB | 4.77 |
+| 7.4 | Epoch 9 slice 1 | wiki+owt | ~51 MB | 3.17 GB | 4.77 |
+| 7.5 | Epoch 10 slice 1 | wiki+owt | ~51 MB | 3.22 GB | 4.77 |
+| 7.9 | Slice-next ×1 · ep 8,9,10 slice 2 — **output 1** | wiki+owt | ~153 MB | 3.37 GB | ~4.75 |
+| 8.3 | Stable pass · same slices (repeat) | wiki+owt | — | 3.37 GB | lower — **output 2** |
+
+### Training Data Volume — Local WikiText-103
+
+| Net Epoch | Step | Domain | New unique data | Cumul. unique | End Loss |
+|----------:|------|--------|----------------:|--------------:|--------:|
+| 1 | WikiText-103 | wiki | 515 MB | 515 MB | ~4.45 |
+| 2–5 | WikiText-103 (repeats) | wiki | — | 515 MB | 4.24 |
+
+### Comparison Summary
+
+| | Local wiki | BTM lineage (output 2) |
+|---|---|---|
+| Net epochs | 5 | ~8.3 |
+| Unique data seen | 515 MB (wiki only) | ~3.37 GB (wiki+owt) |
+| Passes over data | 5 | varies (1–2 per file) |
+| End loss | 4.24 | ~4.7+ |
+| End ppl | 69 | ~117 |
+| Domain | single | mixed |
+
+The BTM model has seen ~6.5× more unique data across a broader domain.
+
+### Validation Strategy (May 18, 2026)
+
+Four models will be evaluated:
+1. **local_epoch5** — WikiText-103 only, w64, loss ~4.238 (floor of single-domain training)
+2. **local_epoch5_w128** — positional interpolation 64→128, adapted on 1/10th of WikiText-103
+3. **local_epoch5_w256** — positional interpolation 128→256, adapted on 1/10th of WikiText-103
+4. **server_w256_pre_stable** — BTM lineage, w256, before final stable-data pass (sliding-slice endpoint)
+5. **server_w256_post_stable** — same lineage, after one full pass on unmodified data slices (expected lower loss)
+
+Four validation datasets, all held out from training:
+
+| Dataset | File | Lines | Size | Purpose |
+|---------|------|-------|------|---------|
+| WikiText-103 held-out | `val_wiki.txt` | 29,259 | 13MB | In-domain (same source as local training) |
+| OpenWebText held-out | `val_owt.txt` | 29,259 | 3.6MB | In-domain (same source as server training) |
+| Wiki 50% + OWT 50% | `val_mixed.txt` | 29,258 | 8.3MB | Mixed-domain coverage |
+| LAMBADA (OpenAI test set) | `val_lambada.txt` | 5,153 | 1.7MB | Out-of-domain; tests long-range next-word prediction |
+
+LAMBADA is a standard LM benchmark entirely independent of both training sources. Each passage requires broader context to predict the final word correctly, making it a useful probe of how well the model generalises beyond its training distribution.
+
+All four files live in `raw_data/`. Trainer.py validation mode (to be added) will run a forward pass over the given file and report cross-entropy loss — no training, no gradient updates.
 
 ### Key References
 | Topic | Paper | Authors | Year |

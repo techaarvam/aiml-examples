@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="790" font-family="system-ui,sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="790" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="350" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f172a">BTM Training Lineage</text>
+
+  <!-- ── Epochs 1-2 WikiText-103 ── -->
+  <rect x="60" y="42" width="580" height="58" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="350" y="65" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epochs 1–2 · WikiText-103 · local RTX 5070</text>
+  <text x="350" y="85" text-anchor="middle" fill="#374151">loss 10.82 → 4.34  ·  ppl 50,011 → 77</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="100" x2="350" y2="122" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── BTM label ── -->
+  <text x="350" y="138" text-anchor="middle" font-size="12" font-weight="600" fill="#166534">BTM — 4 × RTX 3090 · parallel · Wiki+OWT mixed</text>
+
+  <!-- Branch boxes -->
+  <rect x="62"  y="146" width="133" height="48" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="128" y="166" text-anchor="middle" font-weight="600" fill="#166534">Branch A</text>
+  <text x="128" y="183" text-anchor="middle" fill="#374151">epoch_3.txt</text>
+
+  <rect x="203" y="146" width="133" height="48" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="269" y="166" text-anchor="middle" font-weight="600" fill="#166534">Branch B</text>
+  <text x="269" y="183" text-anchor="middle" fill="#374151">epoch_4.txt</text>
+
+  <rect x="344" y="146" width="133" height="48" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="410" y="166" text-anchor="middle" font-weight="600" fill="#166534">Branch C</text>
+  <text x="410" y="183" text-anchor="middle" fill="#374151">epoch_5.txt</text>
+
+  <rect x="485" y="146" width="133" height="48" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="551" y="166" text-anchor="middle" font-weight="600" fill="#166534">Branch D</text>
+  <text x="551" y="183" text-anchor="middle" fill="#374151">epoch_6.txt</text>
+
+  <!-- converge lines -->
+  <line x1="128" y1="194" x2="350" y2="225" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="269" y1="194" x2="350" y2="225" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="410" y1="194" x2="350" y2="225" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="551" y1="194" x2="350" y2="225" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+
+  <!-- Merge box -->
+  <rect x="195" y="225" width="310" height="36" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="350" y="242" text-anchor="middle" font-weight="600" fill="#166534">Merge — average weights</text>
+  <text x="350" y="257" text-anchor="middle" fill="#374151">loss ~5.05  ·  ppl ~156</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="261" x2="350" y2="283" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Epoch 7 Sequential ── -->
+  <rect x="60" y="283" width="580" height="58" rx="6" fill="#fef9c3" stroke="#fde047" stroke-width="1.5"/>
+  <text x="350" y="306" text-anchor="middle" font-size="13" font-weight="600" fill="#713f12">Epoch 7 · Sequential · Wiki+OWT · cloud</text>
+  <text x="350" y="326" text-anchor="middle" fill="#374151">loss 5.05 → 5.05  ·  ppl 156 → 156</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="341" x2="350" y2="363" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── w64→w128 adapt ── -->
+  <rect x="60" y="363" width="580" height="58" rx="6" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+  <text x="350" y="386" text-anchor="middle" font-size="13" font-weight="600" fill="#4a044e">Context Adapt · w64→w128 · epoch_7 1/10th · RTX 5090</text>
+  <text x="350" y="406" text-anchor="middle" fill="#374151">loss 5.01 → 4.93  ·  ppl 150 → 138</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="421" x2="350" y2="443" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── w128→w256 adapt ── -->
+  <rect x="60" y="443" width="580" height="58" rx="6" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+  <text x="350" y="466" text-anchor="middle" font-size="13" font-weight="600" fill="#4a044e">Context Adapt · w128→w256 · epoch_7 1/10th · RTX 5090</text>
+  <text x="350" y="486" text-anchor="middle" fill="#374151">loss 5.01 → 4.72  ·  ppl 150 → 112</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="501" x2="350" y2="523" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Epochs 8, 9, 10 slice 1 ── -->
+  <rect x="60" y="523" width="580" height="58" rx="6" fill="#ffedd5" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="350" y="546" text-anchor="middle" font-size="13" font-weight="600" fill="#7c2d12">Epochs 8, 9, 10 · slice 1 · Wiki+OWT · RTX 5090</text>
+  <text x="350" y="566" text-anchor="middle" fill="#374151">loss 4.85 → 4.77  ·  ppl 128 → 118</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="581" x2="350" y2="603" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Slice-next iter 1 ── -->
+  <rect x="60" y="603" width="500" height="58" rx="6" fill="#ffedd5" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="310" y="626" text-anchor="middle" font-size="13" font-weight="600" fill="#7c2d12">Slice-next × 1 · epochs 7,8,9,10 · slice 2</text>
+  <text x="310" y="646" text-anchor="middle" fill="#374151">loss 4.85 → 4.75  ·  ppl 128 → 116</text>
+  <!-- output 1 badge -->
+  <rect x="568" y="611" width="72" height="24" rx="4" fill="#0284c7"/>
+  <text x="604" y="627" text-anchor="middle" font-size="11" font-weight="bold" fill="white">output 1</text>
+
+  <!-- arrow -->
+  <line x1="350" y1="661" x2="350" y2="683" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ── Stable pass ── -->
+  <rect x="60" y="683" width="500" height="58" rx="6" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="1.5"/>
+  <text x="310" y="706" text-anchor="middle" font-size="13" font-weight="600" fill="#0c4a6e">Stable pass · unmodified slices · loss descent</text>
+  <text x="310" y="726" text-anchor="middle" fill="#374151">loss ~4.75 → lower  ·  ppl ~116 → lower</text>
+  <!-- output 2 badge -->
+  <rect x="568" y="691" width="72" height="24" rx="4" fill="#0284c7"/>
+  <text x="604" y="707" text-anchor="middle" font-size="11" font-weight="bold" fill="white">output 2</text>
+
+</svg>
