@@ -16,9 +16,9 @@
 | num_layers | 12 |
 | window_size | 64 |
 | batch_size | 700 (tuned to fill 45GB VRAM) |
-| max_vocab_size | 30,000 |
+| max_vocab_size | 30,000 → 50,000 (switched after initial LR experiments) |
 | float_type | bfloat16 |
-| Total params | 68,586,800 |
+| Total params | 68,586,800 (30k) → 76,485,456 (50k) |
 | Tokens | 104,327,545 |
 | Batches/epoch | 149,040 |
 
@@ -34,12 +34,12 @@
 
 ### Parameter split: vocab vs transformer core
 Vocab size dominates total parameter count. Larger vocab = more embedding + output params, fewer left for transformer layers.
-| | Local (50k vocab) | Server (30k vocab) |
-|---|---|---|
-| Vocab-related params | 51.2M | 30.7M |
-| Transformer core | 24.8M (8 layers) | 37.3M (12 layers) |
-| Total | ~76M | 68.6M |
-Server has more transformer core capacity despite lower total params.
+Initial server config used 30k vocab; switched to 50k after LR experiments. All BTM and subsequent runs use 50k.
+| | Local (50k vocab) | Server early (30k vocab) | Server later (50k vocab) |
+|---|---|---|---|
+| Vocab-related params | 51.2M | 30.7M | 51.2M |
+| Transformer core | 24.8M (8 layers) | 37.3M (12 layers) | 24.8M (8 layers) |
+| Total | ~76M | 68.6M | ~76M |
 
 ### LR Experiments (Server, Epoch 1)
 | LR | Vocab | Outcome |
