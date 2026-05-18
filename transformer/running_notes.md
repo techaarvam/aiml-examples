@@ -461,6 +461,9 @@ w256 continuation killed — loss oscillated without cumulative reduction. Final
 | 2 | final | ~4.63 |
 | 3 | 55% | 4.4860 |
 
+**Interim backup — epoch 3, loss 4.4796**
+`runs/w128_server_bkp/checkpoint_epoch3_loss4.48/` — model.pth, model.onnx, vocab.json
+
 ---
 
 ### Bug fix — vocab mismatch in runner.py / DataInput.py (May 17, 2026)
