@@ -467,12 +467,12 @@ Full 513 MB epoch_9 and epoch_10 were uploaded but not reached before the run wa
 **Loss log**
 | Epoch | File | Loss |
 |-------|------|------|
-| 1 | epoch_9 slice | ~4.93 |
-| 2 | epoch_10 slice | ~4.63 |
-| 3 | epoch_8 slice | 4.4860 |
-| 4 | epoch_9 slice | 4.4796 |
+| 1 | epoch_9 slice | — |
+| 2 | epoch_10 slice | 4.7026 |
+| 3 | epoch_8 slice | 4.3366 |
+| 4 | epoch_9 slice | 4.2110 |
 
-**Interim backup — epoch 4, loss 4.4796**
+**Interim backup — epoch 4, loss 4.2110**
 `runs/w128_server_bkp/checkpoint_epoch3_loss4.48/` — model.pth, model.onnx, vocab.json
 
 ---
