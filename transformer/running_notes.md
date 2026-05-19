@@ -495,6 +495,59 @@ Full 513 MB epoch_9 and epoch_10 were uploaded but not reached before the run wa
 
 ---
 
+### Vocab Integrity Audit (May 19, 2026)
+
+**Server vocab history**
+
+| Phase | Vocab | Notes |
+|-------|-------|-------|
+| Server early (LR experiments) | 30k | built from Wiki+OWT; separate architecture config, abandoned |
+| Server switch to 50k | vocab_local copied from local machine | intent: match local vocab exactly |
+| BTM branches (pre-May-17 bug) | vocab rebuilt from OWT slice per branch | DataInput.py bug overwrote the copied vocab in each branch's cache |
+| Server root vocab.json after BTM | vocab_server (OWT-rebuilt) | persisted as de facto root from that point |
+| w128 server continuation (post-fix) | vocab_server | runner.py copied the (now OWT-rebuilt) root vocab |
+| Local (all runs) | vocab_local | WikiText-103 only; never touched OWT |
+
+**What the two 50k vocabs look like**
+- `vocab_local` and `vocab_server` share 36,709 of 50,000 tokens
+- Of those shared tokens, **99.6% have different indices**
+- 13,291 tokens are unique to each (WikiText-rare tokens vs OWT-specific terms like `redis`, `camaro`)
+- Even `<unk>` is at a different index (local: 2352, server: 2683)
+
+The vocabs were built independently from different corpora; they are not one derived from the other.
+
+**Root cause sequence**
+1. Vocab_local was correctly copied to server when switching to 50k
+2. BTM branches trained on OWT data — this was new data, never cached
+3. Pre-May-17 bug: `vocab_file` path set but file not copied to run dir → `DataInput.py` rebuilt vocab from the OWT training slice → vocab_server embedded in each branch's cache
+4. After BTM, the server's root vocab.json became vocab_server (OWT-rebuilt), either promoted by a run or overwritten
+5. May-17 fix: `runner.py` now copies root vocab.json to run dir — but the root was already vocab_server
+6. w128 server continuation: inherited vocab_server from the corrupted root
+
+**Model integrity assessment**
+
+| Model | Starting checkpoint | Training vocab | Status |
+|-------|---------------------|----------------|--------|
+| model_local_w64 | scratch | vocab_local | **CLEAN** |
+| model_local_w128 | model_local_w64 | vocab_local | **CLEAN** |
+| model_server_w256_out2 | epoch 2 local (vocab_local embeddings) | vocab_server from BTM step 1 | **CORRUPTED at BTM start; partially recovered** |
+| model_server_w128 | model_local_w128 (vocab_local embeddings) | vocab_server | **CORRUPTED — confirmed** |
+
+**model_server_w128 — confirmed mismatch**
+The downloaded `vocab.json` from run `w128_20260518_162121` matches `vocab_server` exactly. The starting checkpoint (`model_local_w128`) has an embedding table indexed for `vocab_local`. Every token ID fed into training was from a different mapping. Loss did reduce (3.85 start → 4.70 → 4.21 over 4 small epochs) but this reflects the model partially adapting to the scrambled mapping, not genuine improvement from the local baseline.
+
+**model_server_w256_out2 — corrupted at BTM, partially recovered**
+The DataInput.py bug hit at the first batch of BTM training: each branch rebuilt vocab from its OWT data slice. After the merge and many more training steps (epoch 7 sequential + w128 + w256 + sliding-slice runs), the model trained consistently on vocab_server. Whether the merge across branches was clean (all 4 branches having the same vocab_server despite different slices) or slightly noisy (rare tokens near the 50k cutoff differing between slices) is unverifiable — branch checkpoints are gone. The oscillatory loss in the w256 sliding-slice runs may be partly attributable to this misalignment from the corrupted starting point.
+
+**Epoch loss data**
+All server loss numbers are retained. They are real measurements of how well the model predicted tokens under the vocab mapping it was actually trained with — not evidence of correct generalisation from the starting checkpoint.
+
+**Redo assessment**
+- `model_server_w128`: clear redo candidate. Only 4 small epochs, confirmed mismatch, negligible cost to restart. Fix: pin `vocab_local.json` explicitly in the server config and verify it propagates correctly before starting.
+- `model_server_w256_out2`: larger cost. Redoing the full BTM (4 × 3 epochs on cloud machines) plus sequential + context extension runs. The model may still serve as a useful study in vocab-mismatched training; whether to redo depends on whether a clean w256 result is needed.
+
+---
+
 ### Vocab Size Experiment (Server, 50k vocab, lr=0.0006, batch=640)
 Restarted server with 50k vocab to match local and isolate whether vocab was contributing to local's better convergence.
 
