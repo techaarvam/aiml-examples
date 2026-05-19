@@ -14,14 +14,14 @@
   <!-- Epoch 1 -->
   <rect x="50" y="58" width="380" height="54" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
   <text x="240" y="79" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epoch 1</text>
-  <text x="240" y="98" text-anchor="middle" fill="#374151">loss 10.82 → ~4.45  ·  ppl 50,011 → ~86</text>
+  <text x="240" y="98" text-anchor="middle" fill="#374151">loss 10.82 → ~4.55  ·  ppl 50,011 → ~95</text>
 
   <line x1="240" y1="112" x2="240" y2="130" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- Epoch 2 -->
   <rect x="50" y="130" width="380" height="54" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
   <text x="240" y="151" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">Epoch 2</text>
-  <text x="240" y="170" text-anchor="middle" fill="#374151">loss ~4.45 → 4.34  ·  ppl ~86 → 77</text>
+  <text x="240" y="170" text-anchor="middle" fill="#374151">loss ~4.55 → 4.34  ·  ppl ~95 → 77</text>
 
   <line x1="240" y1="184" x2="240" y2="202" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
 
