@@ -19,6 +19,9 @@ from argParser import args
 set_seed(args.seed)
 set_verbosity(args.verbosity)
 cnn = cnn_models.CNN(args.hidden_size).to(common.device)
+total_params = sum(p.numel() for p in cnn.parameters())
+trainable_params = sum(p.numel() for p in cnn.parameters() if p.requires_grad)
+dbg_output(f"Model parameters: {total_params:,} total, {trainable_params:,} trainable")
 
 loss_fn = nn.NLLLoss()
 optimizer = torch.optim.SGD(params =cnn.parameters(), lr=args.lr)
