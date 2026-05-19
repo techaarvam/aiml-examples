@@ -76,15 +76,9 @@ os.makedirs(run_dir, exist_ok=True)
 save_model = os.path.join(run_dir, "model.pth")
 onnx_model = os.path.join(run_dir, "model.onnx")
 log_file   = os.path.join(run_dir, "train.log")
-vocab_file = os.path.join(run_dir, "vocab.json")
 
 args["save_model"] = save_model
-args["vocab_file"] = vocab_file
 
-# Seed run dir vocab.json from root so DataInput doesn't rebuild from data
-root_vocab = os.path.join(HERE, "vocab.json")
-if os.path.exists(root_vocab):
-    shutil.copy2(root_vocab, vocab_file)
 
 # ── Reproducibility dump ──────────────────────────
 meta = dict(args)
@@ -132,7 +126,6 @@ write_sh(os.path.join(run_dir, "cmd_pth2onnx.sh"), "\n".join([
     f"python {os.path.join(HERE, 'pth2onnx.py')} \\",
     f"    --embedding_type {args['embedding_type']} \\",
     f"    --vecDims {args['vecDims']} \\",
-    f"    --vocab_file {vocab_file} \\",
     f"    --output_type {args['output_type']} \\",
     f"    --num_heads {args['num_heads']} \\",
     f"    --num_layers {args['num_layers']} \\",
@@ -147,7 +140,7 @@ write_sh(os.path.join(run_dir, "cmd_netron.sh"),
     f"input('Serving on 0.0.0.0:8081 — press Enter to stop\\n')\"")
 
 infer_cmd = build_cmd({"model_file": save_model, "resume": False, "input": None,
-                       "vocab_file": vocab_file, "epochs": None, "save_model": None})
+                       "epochs": None, "save_model": None})
 write_sh(os.path.join(run_dir, "cmd_infer.sh"), infer_cmd)
 
 write_sh(os.path.join(run_dir, "cmd_webserver.sh"),
@@ -177,7 +170,7 @@ if os.path.exists(src_html):
         "Tech Aarvam · 11M params · WikiText-103 · 30K vocab",
         f"Tech Aarvam · {profile_name} · "
         f"L{args['num_layers']} H{args['num_heads']} D{args['vecDims']} "
-        f"W{args['window_size']} V{args.get('max_vocab_size','?')} · {timestamp}"
+        f"W{args['window_size']} · {timestamp}"
     )
     open(os.path.join(run_dir, "web_infer.html"), "w").write(html)
 

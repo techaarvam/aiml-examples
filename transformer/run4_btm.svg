@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="500" font-family="system-ui,sans-serif" font-size="12">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="500" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="380" y="26" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f172a">Run 4 — BTM Round 2 · OpenWebText · tiktoken cl100k_base · 128M params</text>
+
+  <!-- Data box -->
+  <rect x="60" y="38" width="640" height="50" rx="6" fill="#dbeafe" stroke="#93c5fd" stroke-width="1.5"/>
+  <text x="380" y="58" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a5f">OpenWebText · ~38 GB · 20 shards × 1.9 GB each</text>
+  <text x="380" y="78" text-anchor="middle" fill="#374151">capped to 20M tokens / shard · 400M tokens total · steps/shard ≈ 78K</text>
+
+  <!-- Arrow down -->
+  <line x1="380" y1="88" x2="380" y2="108" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Config bar -->
+  <text x="380" y="122" text-anchor="middle" font-size="11" font-weight="600" fill="#475569">w64 · batch 256 · lr 0.0006 · bfloat16 · grad_checkpoint · 5 shards/machine · 1 epoch/shard</text>
+
+  <!-- Machine boxes -->
+  <rect x="28"  y="132" width="158" height="72" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="107" y="152" text-anchor="middle" font-weight="600" fill="#166534">Machine 1</text>
+  <text x="107" y="170" text-anchor="middle" fill="#374151">gs1 – gs5</text>
+  <text x="107" y="186" text-anchor="middle" fill="#374151">100M tokens</text>
+  <text x="107" y="199" text-anchor="middle" font-size="10" fill="#6b7280">~390K steps</text>
+
+  <rect x="200" y="132" width="158" height="72" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="279" y="152" text-anchor="middle" font-weight="600" fill="#166534">Machine 2</text>
+  <text x="279" y="170" text-anchor="middle" fill="#374151">gs6 – gs10</text>
+  <text x="279" y="186" text-anchor="middle" fill="#374151">100M tokens</text>
+  <text x="279" y="199" text-anchor="middle" font-size="10" fill="#6b7280">~390K steps</text>
+
+  <rect x="372" y="132" width="158" height="72" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="451" y="152" text-anchor="middle" font-weight="600" fill="#166534">Machine 3</text>
+  <text x="451" y="170" text-anchor="middle" fill="#374151">gs11 – gs15</text>
+  <text x="451" y="186" text-anchor="middle" fill="#374151">100M tokens</text>
+  <text x="451" y="199" text-anchor="middle" font-size="10" fill="#6b7280">~390K steps</text>
+
+  <rect x="544" y="132" width="158" height="72" rx="5" fill="#dcfce7" stroke="#86efac" stroke-width="1.5"/>
+  <text x="623" y="152" text-anchor="middle" font-weight="600" fill="#166534">Machine 4</text>
+  <text x="623" y="170" text-anchor="middle" fill="#374151">gs16 – gs20</text>
+  <text x="623" y="186" text-anchor="middle" fill="#374151">100M tokens</text>
+  <text x="623" y="199" text-anchor="middle" font-size="10" fill="#6b7280">~390K steps</text>
+
+  <!-- Converge lines -->
+  <line x1="107" y1="204" x2="350" y2="268" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="279" y1="204" x2="360" y2="268" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="451" y1="204" x2="400" y2="268" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+  <line x1="623" y1="204" x2="410" y2="268" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 2"/>
+
+  <!-- Merge box -->
+  <rect x="185" y="268" width="390" height="46" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="380" y="288" text-anchor="middle" font-weight="600" fill="#166534">BTM Merge · average weights across 4 machines</text>
+  <text x="380" y="306" text-anchor="middle" fill="#374151">btm_r2_merged.pth · 128M params · 400M tokens seen</text>
+
+  <!-- Arrow down -->
+  <line x1="380" y1="314" x2="380" y2="336" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Interpolation box -->
+  <rect x="80" y="336" width="600" height="58" rx="6" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+  <text x="380" y="358" text-anchor="middle" font-size="13" font-weight="600" fill="#4a044e">Context Interpolation · w64 → w128</text>
+  <text x="380" y="378" text-anchor="middle" fill="#374151">interp_adapt.txt · 363 MB · 1/100th of each shard concatenated · ~90M tokens</text>
+
+  <!-- Arrow down -->
+  <line x1="380" y1="394" x2="380" y2="416" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Output box -->
+  <rect x="185" y="416" width="390" height="48" rx="6" fill="#0284c7"/>
+  <text x="380" y="437" text-anchor="middle" font-size="13" font-weight="600" fill="white">btm_r2_interpolated.pth</text>
+  <text x="380" y="455" text-anchor="middle" font-size="11" fill="#bae6fd">128M params · cl100k_base · w128</text>
+
+</svg>

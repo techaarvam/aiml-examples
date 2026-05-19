@@ -1,5 +1,75 @@
 # Transformer Model Experiments - Running Notes
 
+## Run 4 — BTM Round 2: tiktoken cl100k_base, w64, 4 machines (May 19, 2026)
+
+### Tokenizer change from Run 3
+| | Run 3 | Run 4 |
+|---|---|---|
+| Tokenizer | word_tokenize + Counter | tiktoken cl100k_base |
+| Vocab size | 50,000 (capped frequency) | 100,277 (fixed BPE) |
+| Total params | ~76M | ~128M |
+
+### Parameter breakdown (128M)
+| Component | Params |
+|-----------|--------|
+| Embedding (100,277 × 512) | 51.3M |
+| Output projection (100,277 × 512) | 51.3M |
+| 8 transformer layers | 25.2M |
+| **Total** | **~127.8M** |
+
+### Config (btm_w64 profile)
+| Parameter | Value |
+|-----------|-------|
+| vecDims | 512 |
+| num_heads | 8 |
+| num_layers | 8 |
+| window_size | 64 |
+| batch_size | 256 |
+| lr | 0.0006 |
+| float_type | bfloat16 |
+| grad_checkpoint | true |
+| tiktoken_encoding | cl100k_base |
+| max_tokens | 20,000,000 |
+| epochs | 5 per machine |
+| optimizer | adam |
+
+### Data
+| Field | Value |
+|-------|-------|
+| Source | OpenWebText (full, ~38 GB) |
+| Total shards | 20 |
+| Shard naming | gs{N}_m{M}_s{S}.txt (N=global 1–20, M=machine 1–4, S=within-machine 1–5) |
+| Raw shard size | 1.9 GB each |
+| Tokens per shard (full) | ~432M |
+| max_tokens cap | 20,000,000 per shard |
+| Tokens per machine (5 shards × 20M) | 100M |
+| Total tokens across 4 machines | 400M |
+| Steps per shard (capped, batch=256) | ~78,125 |
+| Steps per machine | ~390,625 |
+
+### Machines
+| Machine | Host | Port | Shards |
+|---------|------|------|--------|
+| 1 | 74.48.78.46 | 61077 | gs1–gs5 |
+| 2 | 49.49.141.68 | 40374 | gs6–gs10 |
+| 3 | 120.238.149.205 | 31240 | gs11–gs15 |
+| 4 | 207.102.87.207 | 52853 | gs16–gs20 |
+
+### Post-merge plan
+1. Merge 4 machine checkpoints: `python merge_checkpoints.py btm_merged.pth runs/btm_w64_m*/model.pth`
+2. Context interpolation run on `raw_data/interp_adapt.txt` (363 MB, 1/100th of each shard concatenated, ~90M tokens)
+3. Done — no further sequential training planned
+
+### Diagram
+![Run 4 BTM](run4_btm.svg)
+
+### Loss Log
+| Machine | Shard | Epoch | Loss |
+|---------|-------|-------|------|
+| | | | |
+
+---
+
 ## Run 3 — Architecture Overhaul: Standard Pre-Norm Transformer (May 13–18, 2026)
 
 ### Architecture Changes from Run 2

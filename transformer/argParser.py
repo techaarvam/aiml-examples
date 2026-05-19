@@ -17,7 +17,7 @@ def parse_args():
     parser.add_argument('--output_type', type=str, default='vecs', choices=['indices', 'vecs'], help='Output type: indices (linear projection to vocab, crossentropy loss) or vecs (linear projection to vecDims-1, MSE loss)')
     parser.add_argument('--input', type=str, default=None, help='Path to input text file (required for training)')
     parser.add_argument('--input_list', type=str, default=None, help='Comma-separated input files or path to a JSON file listing them. Files are cycled across epochs.')
-    parser.add_argument('--vocab_file', type=str, default='vocab.json', help='Path to save/load vocabulary JSON')
+    parser.add_argument('--tiktoken_encoding', type=str, default='cl100k_base', help='tiktoken encoding name (cl100k_base, p50k_base, o200k_base)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     parser.add_argument('--model_file', type=str, default=None, help='Path to load a saved model')
     parser.add_argument('--output_size', type=int, default=50, help='Number of tokens to generate during inference')
@@ -27,7 +27,6 @@ def parse_args():
     parser.add_argument('--quantize', action='store_true', default=False, help='Quantize ONNX model to INT8 after export (pth2onnx only)')
     parser.add_argument('--vecDims', type=int, default=128, help='Word vector / embedding dimensions. default=128')
     parser.add_argument('--embedding_type', type=str, default='learned', choices=['glove-fixed', 'learned'], help='Embedding type: glove-fixed (pre-trained GloVe, frozen) or learned (random init, trained end-to-end)')
-    parser.add_argument('--max_vocab_size', type=int, default=30000, help='Cap vocabulary to top-N most frequent words (0=unlimited)')
     parser.add_argument('--output', type=str, default=None, help='Output path for pth2onnx conversion (defaults to model_file with .onnx extension)')
     parser.add_argument('--resume', action='store_true', default=False, help='Resume training from --model_file checkpoint')
     parser.add_argument('--start_epoch', type=int, default=None, help='Manually override starting epoch when resuming (1-based). Required for old-format checkpoints.')
@@ -36,6 +35,8 @@ def parse_args():
     parser.add_argument('--validate', action='store_true', default=False, help='Validation mode: run forward pass over --input, print cross-entropy loss and perplexity, then exit')
     parser.add_argument('--grad_checkpoint', action='store_true', default=False,
         help='Enable gradient checkpointing per transformer layer (saves activation memory, costs ~30% extra compute)')
+    parser.add_argument('--max_tokens', type=int, default=None,
+        help='Cap dataset to first N tokens per shard (applied after cache load; cache always stores full data)')
     return parser.parse_args()
 
 args = parse_args()

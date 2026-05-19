@@ -32,7 +32,6 @@ batch_size     = 8192
 epochs         = 5
 lr             = 0.001
 lr_schedule    = "none"
-max_vocab_size = 3000
 
 # ── Mid: 10 epochs on combined.txt ────────────────
 # Purpose: local iteration, fast feedback on architecture
@@ -45,22 +44,20 @@ window_size    = 32
 batch_size     = 1536
 epochs         = 10
 lr             = 0.0003
-max_vocab_size = 10000
 
 # ── High: local RTX 5070 run on WikiText-103 ─────────
 # Purpose: meaningful local training — full wiki corpus, float16, ~2.8 hrs/epoch
 # Expected: ~4 nights (8 hrs/night) for 10 epochs
 [high]
-input          = "raw_data/adapt_wiki2.txt"
+input          = "raw_data/wikitext103.txt"
 vecDims        = 512
 num_heads      = 8
 num_layers     = 8
-window_size    = 256
-batch_size     = 16
+window_size    = 128
+batch_size     = 512
 epochs         = 100
-lr             = 0.00003
+lr             = 0.001
 float_type     = "bfloat16"
-max_vocab_size = 50000
 
 # ── Server: full cloud run on WikiText-103 ─────────
 # Purpose: real training run on cloud GPU (A100 / 4090)
@@ -73,6 +70,22 @@ window_size    = 512
 batch_size     = 64
 epochs         = 100
 lr             = 0.0003
-max_vocab_size = 30000
 float_type     = "bfloat16"
 cache_file     = "raw_data/wikitext103.cache"
+
+# ── BTM Round 2: w64 · 4 machines · tiktoken cl100k_base ─────
+# Prep:  python raw_data/prepare_btm.py
+# Train: bash raw_data/btm_machines/machineN/cmd_run.sh  (one per machine)
+# Merge: python merge_checkpoints.py btm_merged.pth runs/btm_w64_*/model.pth
+[btm_w64]
+_desc           = "BTM round 2 · w64 · cl100k_base · 5 epochs/machine"
+vecDims         = 512
+num_heads       = 8
+num_layers      = 8
+window_size     = 64
+batch_size      = 256
+epochs          = 5
+lr              = 0.0006
+float_type      = "bfloat16"
+grad_checkpoint = true
+max_tokens      = 20000000

@@ -15,10 +15,11 @@ from argParser import *
 import common
 import multihead
 
+
 from seeder import *
 from torch import nn
 from torch.utils.data import DataLoader
-from nltk.tokenize import word_tokenize
+
 import random
 from debug import *
 from tqdm import tqdm
@@ -113,6 +114,8 @@ if not args.model_file or args.resume:
 
     if args.resume and checkpoint and 'optimizer' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer'])
+        for pg in optimizer.param_groups:   # add these two lines
+            pg['lr'] = args.lr
         start_epoch = checkpoint.get('epoch', 0)
         dbg_output(f"Resuming from epoch {start_epoch + 1}")
 
@@ -222,50 +225,28 @@ if not inference_mode and not sys.stdin.isatty():
     sys.exit(0)
 
 while True:
-    dbg_output (f"Enter the starting portion of the text to predict the next words (context={infer_ctx-1} tokens):")
+    dbg_output(f"Enter the starting portion of the text to predict the next words (context={infer_ctx-1} tokens):")
     userInput = input()
 
-    inputTokens = word_tokenize (userInput.lower())
+    inputIds = dIn.enc.encode(userInput)
+    inputIds = inputIds[-(infer_ctx - 1):]
+    pad_len = (infer_ctx - 1) - len(inputIds)
+    inputIndices = torch.tensor(inputIds, dtype=torch.long)
+    if pad_len > 0:
+        padding = torch.zeros(pad_len, dtype=torch.long)
+        inputIndices = torch.cat((padding, inputIndices), dim=0)
 
-    inputTokens = inputTokens[:infer_ctx-1]
-    inputVecs, inputIndices = dIn.tokensToVecsAndIndices(inputTokens)
-
-    pad_len = (infer_ctx-1) - len(inputTokens)
-    if args.embedding_type == "glove-fixed":
-        if pad_len > 0:
-            padding = torch.zeros(pad_len, inputVecs.shape[1])
-            inputVecs = torch.cat((padding, inputVecs), dim=0)
-    else:
-        if pad_len > 0:
-            padding = torch.zeros(pad_len, dtype=torch.long)
-            inputIndices = torch.cat((padding, inputIndices), dim=0)
-
-    generated = list(inputTokens)
+    generated_ids = list(inputIds)
     with torch.no_grad():
         for _ in range(args.output_size):
-            if args.embedding_type == "glove-fixed":
-                infInputs = inputVecs.unsqueeze(0).to(common.device).to(common.dtype)
-            else:
-                infInputs = inputIndices.unsqueeze(0).to(common.device)
-
+            infInputs = inputIndices.unsqueeze(0).to(common.device)
             infOutputs = transformer.forward(infInputs)
-
             logits = infOutputs[0, -1, :]
-            unk_idx = dIn.wordDict.get('<unk>', -1)
-            if unk_idx >= 0:
-                logits[unk_idx] = float('-inf')
             top_logits, top_indices = torch.topk(logits, 5)
             probs = torch.softmax(top_logits / 0.7, dim=-1)
             nextIdx = top_indices[torch.multinomial(probs, 1).item()].item()
-            # nextIdx = top_indices[torch.argmax(probs).item()].item()
-            nextWord = dIn.indicesToTokens([nextIdx])[0]
-            generated.append(nextWord)
+            generated_ids.append(nextIdx)
+            newIdx = torch.tensor([nextIdx], dtype=torch.long)
+            inputIndices = torch.cat((inputIndices[1:], newIdx))
 
-            if args.embedding_type == "glove-fixed":
-                newVec, _ = dIn.tokensToVecsAndIndices([nextWord])
-                inputVecs = torch.cat((inputVecs[1:], newVec), dim=0)
-            else:
-                newIdx = torch.tensor([nextIdx], dtype=torch.long)
-                inputIndices = torch.cat((inputIndices[1:], newIdx))
-
-    print(" ".join(generated))
+    print(dIn.enc.decode(generated_ids))
