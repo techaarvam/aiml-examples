@@ -454,14 +454,25 @@ w256 continuation killed — loss oscillated without cumulative reduction. Final
 | grad_checkpoint | yes |
 | input_list | epoch_8.txt, epoch_9.txt, epoch_10.txt (cycling, 20 epochs) |
 
-**Loss log**
-| Epoch | Progress | Loss |
-|-------|----------|------|
-| 1 | final | ~4.93 |
-| 2 | final | ~4.63 |
-| 3 | 55% | 4.4860 |
+**Data actually seen (run killed after epoch 4)**
+| Epoch | File | File size |
+|-------|------|-----------|
+| 1 | epoch_9.txt | 52 MB (1/10th) |
+| 2 | epoch_10.txt | 52 MB (1/10th) |
+| 3 | epoch_8.txt | 52 MB (1/10th) |
+| 4 | epoch_9.txt | 52 MB (1/10th) |
 
-**Interim backup — epoch 3, loss 4.4796**
+Full 513 MB epoch_9 and epoch_10 were uploaded but not reached before the run was killed. Epoch 5 (epoch_10 full) had started at 17.7% when stopped.
+
+**Loss log**
+| Epoch | File | Loss |
+|-------|------|------|
+| 1 | epoch_9 slice | ~4.93 |
+| 2 | epoch_10 slice | ~4.63 |
+| 3 | epoch_8 slice | 4.4860 |
+| 4 | epoch_9 slice | 4.4796 |
+
+**Interim backup — epoch 4, loss 4.4796**
 `runs/w128_server_bkp/checkpoint_epoch3_loss4.48/` — model.pth, model.onnx, vocab.json
 
 ---
