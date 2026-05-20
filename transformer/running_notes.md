@@ -1,36 +1,49 @@
 # Transformer Model Experiments - Running Notes
 
-## Run 4 — BTM Round 2: tiktoken cl100k_base, w64, 4 machines (May 19, 2026)
+## Run 4 — BTM Round 2: tiktoken gpt2 50k, w64, ~32M params, 4 machines (May 19, 2026)
+
+### Goal
+Smaller model (32M) with a better Chinchilla ratio vs Run 3 (76M, word_tokenize).
 
 ### Tokenizer change from Run 3
 | | Run 3 | Run 4 |
 |---|---|---|
-| Tokenizer | word_tokenize + Counter | tiktoken cl100k_base |
-| Vocab size | 50,000 (capped frequency) | 100,277 (fixed BPE) |
-| Total params | ~76M | ~128M |
+| Tokenizer | word_tokenize + Counter | tiktoken gpt2 |
+| Vocab size | 50,000 (capped frequency) | 50,257 (fixed BPE) |
+| Total params | ~76M | ~32M |
 
-### Parameter breakdown (128M)
+Note: cl100k_base (128M) was attempted first and aborted — loss diverged (7.47→8.03 over first shard) with lr=0.0006, and cache files (~3.4 GB each) filled 16 GB disks on all machines.
+
+### Parameter breakdown (~32M)
 | Component | Params |
 |-----------|--------|
-| Embedding (100,277 × 512) | 51.3M |
-| Output projection (100,277 × 512) | 51.3M |
-| 8 transformer layers | 25.2M |
-| **Total** | **~127.8M** |
+| Embedding (50,257 × 256) | 12.9M |
+| Output projection (50,257 × 256) | 12.9M |
+| 8 transformer layers (4 heads, 256 dims) | 6.3M |
+| **Total** | **~32M** |
+
+### Chinchilla ratio
+| | 128M attempt | 32M final |
+|---|---|---|
+| Params | 128M | 32M |
+| Tokens per machine | 100M (5 epochs) | 400M (20 epochs) |
+| Tokens / Params ratio | 0.78× | 12.5× |
+| Chinchilla optimal | 20× | 20× |
 
 ### Config (btm_w64 profile)
 | Parameter | Value |
 |-----------|-------|
-| vecDims | 512 |
-| num_heads | 8 |
+| vecDims | 256 |
+| num_heads | 4 |
 | num_layers | 8 |
 | window_size | 64 |
 | batch_size | 256 |
-| lr | 0.0006 |
+| lr | 0.0003 |
 | float_type | bfloat16 |
-| grad_checkpoint | true |
-| tiktoken_encoding | cl100k_base |
+| grad_checkpoint | false |
+| tiktoken_encoding | gpt2 |
 | max_tokens | 20,000,000 |
-| epochs | 5 per machine |
+| epochs | 20 per machine |
 | optimizer | adam |
 
 ### Data
@@ -40,33 +53,46 @@
 | Total shards | 20 |
 | Shard naming | gs{N}_m{M}_s{S}.txt (N=global 1–20, M=machine 1–4, S=within-machine 1–5) |
 | Raw shard size | 1.9 GB each |
-| Tokens per shard (full) | ~432M |
-| max_tokens cap | 20,000,000 per shard |
-| Tokens per machine (5 shards × 20M) | 100M |
-| Total tokens across 4 machines | 400M |
-| Steps per shard (capped, batch=256) | ~78,125 |
-| Steps per machine | ~390,625 |
+| Tokens per shard (full) | ~457M (gpt2 tokenizer) |
+| max_tokens cap | 20,000,000 per shard per epoch |
+| Slice rotation | epochs 0–4 → slice 0, 5–9 → slice 1, 10–14 → slice 2, 15–19 → slice 3 |
+| Unique tokens per machine | 4 slices × 5 shards × 20M = 400M |
+| Total unique tokens across 4 machines | 1.6B |
+| Steps per shard epoch (batch=256) | ~78,125 |
 
 ### Machines
 | Machine | Host | Port | Shards |
 |---------|------|------|--------|
 | 1 | 74.48.78.46 | 61077 | gs1–gs5 |
-| 2 | 49.49.141.68 | 40374 | gs6–gs10 |
-| 3 | 120.238.149.205 | 31240 | gs11–gs15 |
+| 2 | 61.228.34.3 | 31302 | gs6–gs10 |
+| 3 | 82.65.196.171 | 40095 | gs11–gs15 (replacement — original power-capped at 180W) |
 | 4 | 207.102.87.207 | 52853 | gs16–gs20 |
 
-### Post-merge plan
-1. Merge 4 machine checkpoints: `python merge_checkpoints.py btm_merged.pth runs/btm_w64_m*/model.pth`
-2. Context interpolation run on `raw_data/interp_adapt.txt` (363 MB, 1/100th of each shard concatenated, ~90M tokens)
-3. Done — no further sequential training planned
+### Actual training approach (decided mid-run)
+All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend context, merge.
+
+1. **w64 phase** — train until saturation (~6-8 epochs per machine)
+2. **extend_context.py** — interpolate posEmbedding 64→128 per machine, resize attention mask
+3. **w128 phase** — 1 epoch per machine, fresh optimizer (no --resume of optimizer state)
+4. **BTM merge** — average weights across 4 machines → `btm_w128_merged.pth`
+5. **Optional close** — 1 epoch on a single machine from merged checkpoint
+
+### Loss Log
+| | Machine 1 | Machine 2 | Machine 3 | Machine 4 |
+|---|---|---|---|---|
+| Shards | gs1–gs5 | gs6–gs10 | gs11–gs15 | gs16–gs20 |
+| **w64 epochs done** | 7 | 7 | 6 (slow machine) | 7 |
+| Epoch 1 loss | 6.4417 | — | — | — |
+| Epoch 2 loss | 6.2867 | — | — | — |
+| Epoch 3 loss | 6.1760 | — | — | — |
+| Epoch 4 loss | 6.1506 | 6.1520 | 6.1616 | — |
+| Epoch 5 loss | 6.1463 | 6.1269 | 6.1312 | 6.1323 |
+| Epoch 6 loss | 6.1165 | 6.1180 | 6.1099 ← final | 6.1026 |
+| Epoch 7 loss | 6.0920 ← final | 6.0871 ← final | — | 6.0885 ← final |
+| **w128 epoch loss** | **5.9181** | **5.8776** | pending | **5.9196** |
 
 ### Diagram
 ![Run 4 BTM](run4_btm.svg)
-
-### Loss Log
-| Machine | Shard | Epoch | Loss |
-|---------|-------|-------|------|
-| | | | |
 
 ---
 

@@ -1,0 +1,5 @@
+phase,machine,epoch,loss,window,model_file,date,notes
+w64_final,1,7,6.0920,64,model_step1_128_m1.pth,2026-05-20,w64 phase final — killed after saturation
+w64_final,2,7,6.0871,64,model_step1_128_m2.pth,2026-05-20,w64 phase final — killed after saturation
+w64_final,3,6,6.1099,64,model_step1_128_m3.pth,2026-05-20,w64 phase final — slow machine stopped at ep6
+w64_final,4,7,6.0885,64,model_step1_128_m4.pth,2026-05-20,w64 phase final — killed after saturation

@@ -73,19 +73,36 @@ lr             = 0.0003
 float_type     = "bfloat16"
 cache_file     = "raw_data/wikitext103.cache"
 
-# ── BTM Round 2: w64 · 4 machines · tiktoken cl100k_base ─────
+# ── BTM Round 2: w64 · 4 machines · tiktoken gpt2 · ~32M params ─────
 # Prep:  python raw_data/prepare_btm.py
 # Train: bash raw_data/btm_machines/machineN/cmd_run.sh  (one per machine)
 # Merge: python merge_checkpoints.py btm_merged.pth runs/btm_w64_*/model.pth
 [btm_w64]
-_desc           = "BTM round 2 · w64 · cl100k_base · 5 epochs/machine"
-vecDims         = 512
-num_heads       = 8
-num_layers      = 8
-window_size     = 64
-batch_size      = 256
-epochs          = 5
-lr              = 0.0006
-float_type      = "bfloat16"
-grad_checkpoint = true
-max_tokens      = 20000000
+_desc             = "BTM round 2 · w64 · gpt2 50k vocab · ~32M params · 5 epochs/machine"
+vecDims           = 256
+num_heads         = 4
+num_layers        = 8
+window_size       = 64
+batch_size        = 256
+epochs            = 20
+lr                = 0.0003
+float_type        = "bfloat16"
+grad_checkpoint   = false
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+
+# ── BTM Round 2: w128 extension · 1 epoch · from model_step1_128.pth ─────
+# Merge: python merge_checkpoints.py btm_w128_merged.pth btm_r2_backups/model_step1_128_m*.pth
+[btm_w128]
+_desc             = "BTM round 2 · w128 extension · 1 epoch · fresh optimizer from model_step1_128.pth"
+vecDims           = 256
+num_heads         = 4
+num_layers        = 8
+window_size       = 128
+batch_size        = 256
+epochs            = 1
+lr                = 0.0003
+float_type        = "bfloat16"
+grad_checkpoint   = false
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"

@@ -1,0 +1,20 @@
+============================================================
+Profile  : btm_w128
+Run dir  : /root/transformer/runs/btm_w128_20260520_064059
+Log      : /root/transformer/runs/btm_w128_20260520_064059/train.log
+Model    : /root/transformer/runs/btm_w128_20260520_064059/model.pth
+Config   : layers=8 heads=4 dims=256 window=128 batch=256 epochs=1
+Data     : N/A
+Vocab    : unlimited
+============================================================
+tiktoken gpt2: vocab size 50,257
+Tokenized 457,621,389 tokens
+Capped to 20,000,000 tokens, slice 0 offset 0
+Model parameters: 32,124,497 total, 32,124,497 trainable
+Loaded model from /root/transformer/model_step1_128_ext.pth (saved after epoch 7)
+Starting epoch overridden to 1
+Input [1/5]: /root/transformer/raw_data/btm_machines/machine1/gs1_m1_s1.txt
+tiktoken gpt2: vocab size 50,257
+Tokenized 457,621,389 tokens
+Capped to 20,000,000 tokens, slice 0 offset 0
+Epoch 1/1 starting...

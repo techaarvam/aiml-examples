@@ -145,7 +145,8 @@ if not args.model_file or args.resume:
             if epoch_file != _current_file:
                 _current_file   = epoch_file
                 args.input      = epoch_file
-                args.cache_file = os.path.splitext(epoch_file)[0] + '.cache'
+                args.cache_file  = None
+                args.start_epoch = i
                 dbg_output(f"Input [{i % len(_input_files) + 1}/{len(_input_files)}]: {epoch_file}")
                 dIn             = DataInput.DataInput()
                 train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)

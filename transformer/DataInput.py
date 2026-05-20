@@ -46,8 +46,12 @@ class DataInput():
                     pickle.dump({'indices': self.indices}, open(args.cache_file, 'wb'))
                     dbg_output(f"Saved cache to {args.cache_file}")
             if args.max_tokens and len(self.indices) > args.max_tokens:
-                self.indices = self.indices[:args.max_tokens]
-                dbg_output(f"Capped to {args.max_tokens:,} tokens (--max_tokens)")
+                slice_idx = (args.start_epoch or 0) // 5
+                start     = slice_idx * args.max_tokens
+                if start + args.max_tokens > len(self.indices):
+                    start = 0
+                self.indices = self.indices[start : start + args.max_tokens]
+                dbg_output(f"Capped to {args.max_tokens:,} tokens, slice {slice_idx} offset {start:,}")
         # inference-only mode: enc already initialized above, no indices needed
 
     def indicesToTokens(self, indices):
