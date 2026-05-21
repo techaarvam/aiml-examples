@@ -133,11 +133,10 @@ if not args.model_file or args.resume:
     interactive    = sys.stdout.isatty()
     progress_file  = os.path.join(os.path.dirname(args.save_model), "progress.txt") \
                      if args.save_model else None
-    if not _cycling:
-        train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
-        total_batches   = len(train_loader)
-        heartbeat_every = max(1, total_batches // 10)
-    _current_file = None
+    train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+    total_batches   = len(train_loader)
+    heartbeat_every = max(1, total_batches // 10)
+    _current_file = args.input if _cycling else None
 
     for i in range(start_epoch, args.epochs):
         if _cycling:
@@ -216,6 +215,32 @@ if not args.model_file or args.resume:
         dbg_output(f"Checkpoint saved to {args.save_model}")
 
 
+def sample_token(logits):
+    logits = logits.float()
+    if args.temperature != 1.0:
+        logits = logits / args.temperature
+    if args.sampler == 'top_k':
+        k = min(args.top_k, logits.size(-1))
+        top_logits, top_indices = torch.topk(logits, k)
+        probs = torch.softmax(top_logits, dim=-1)
+        return top_indices[torch.multinomial(probs, 1).item()].item()
+    elif args.sampler == 'top_p':
+        probs = torch.softmax(logits, dim=-1)
+        sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+        cumsum = torch.cumsum(sorted_probs, dim=-1)
+        keep = (cumsum - sorted_probs) < args.top_p
+        keep[0] = True  # always keep top token
+        filtered = sorted_probs * keep
+        filtered = filtered / filtered.sum()
+        return sorted_indices[torch.multinomial(filtered, 1).item()].item()
+    else:  # min_p
+        probs = torch.softmax(logits, dim=-1)
+        threshold = args.min_p * probs.max().item()
+        mask = probs >= threshold
+        filtered = probs * mask
+        filtered = filtered / filtered.sum()
+        return torch.multinomial(filtered, 1).item()
+
 infer_ctx = args.infer_window_size if args.infer_window_size is not None else args.window_size
 
 # Run inference only in explicit inference mode (--model_file without --resume)
@@ -243,9 +268,7 @@ while True:
             infInputs = inputIndices.unsqueeze(0).to(common.device)
             infOutputs = transformer.forward(infInputs)
             logits = infOutputs[0, -1, :]
-            top_logits, top_indices = torch.topk(logits, 5)
-            probs = torch.softmax(top_logits / 0.7, dim=-1)
-            nextIdx = top_indices[torch.multinomial(probs, 1).item()].item()
+            nextIdx = sample_token(logits)
             generated_ids.append(nextIdx)
             newIdx = torch.tensor([nextIdx], dtype=torch.long)
             inputIndices = torch.cat((inputIndices[1:], newIdx))

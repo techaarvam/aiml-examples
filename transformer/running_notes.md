@@ -23,12 +23,14 @@ Note: cl100k_base (128M) was attempted first and aborted — loss diverged (7.47
 | **Total** | **~32M** |
 
 ### Chinchilla ratio
+Hoffmann et al. (2022) explicitly counts embedding matrices in N ("Note that we also count embeddings matrices in the total parameter count" — Appendix F). This differs from Kaplan (2020) who used non-embedding parameters; this distinction partly explains the different scaling coefficients between the two papers.
+
 | | 128M attempt | 32M final |
 |---|---|---|
-| Params | 128M | 32M |
+| Total params (Chinchilla N) | 128M | 32M |
 | Tokens per machine | 100M (5 epochs) | 400M (20 epochs) |
 | Tokens / Params ratio | 0.78× | 12.5× |
-| Chinchilla optimal | 20× | 20× |
+| Chinchilla optimal (20× total params) | — | **640M tokens** |
 
 ### Config (btm_w64 profile)
 | Parameter | Value |
@@ -68,14 +70,28 @@ Note: cl100k_base (128M) was attempted first and aborted — loss diverged (7.47
 | 3 | 82.65.196.171 | 40095 | gs11–gs15 (replacement — original power-capped at 180W) |
 | 4 | 207.102.87.207 | 52853 | gs16–gs20 |
 
+### Hypothesis: Intrinsic Entropy of Context Length Scaling
+Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a short context until near saturation, then interpolate to a longer window and continue with fresh data. The idea is that context length should grow roughly in proportion to the volume of unique tokens seen — the model earns longer context by first learning well at a shorter one. Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
+
+| Stage | Window | Unique tokens seen (approx) | Chinchilla % (N=32M) |
+|---|---|---|---|
+| w64 saturate | 64 | ~405M (BTM-adj) | ~63% |
+| w128 branch + merge | 128 | ~465M | ~73% |
+| w128 post-merge | 128 | ~505M | ~79% |
+| **w256 continuation** | **256** | **in progress** | **>79%** |
+
+Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
+
 ### Actual training approach (decided mid-run)
 All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend context, merge.
 
 1. **w64 phase** — train until saturation (~6-8 epochs per machine)
 2. **extend_context.py** — interpolate posEmbedding 64→128 per machine, resize attention mask
-3. **w128 phase** — 1 epoch per machine, fresh optimizer (no --resume of optimizer state)
+3. **w128 phase** — 1 epoch per machine, fresh optimizer
 4. **BTM merge** — average weights across 4 machines → `btm_w128_merged.pth`
-5. **Optional close** — 1 epoch on a single machine from merged checkpoint
+5. **Post-merge continuation** — 2 epochs on single machine (M4), slice 2 offset 40M → ep11 loss 5.8210, ep12 loss 5.7632
+6. **extend_context.py** — interpolate posEmbedding 128→256, resize masks → `btm_w256_ext.pth`
+7. **w256 phase** — continuing ep13–15, batch=160, grad_checkpoint=true, single machine (M4)
 
 ### Loss Log
 | | Machine 1 | Machine 2 | Machine 3 | Machine 4 |
@@ -89,7 +105,26 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 | Epoch 5 loss | 6.1463 | 6.1269 | 6.1312 | 6.1323 |
 | Epoch 6 loss | 6.1165 | 6.1180 | 6.1099 ← final | 6.1026 |
 | Epoch 7 loss | 6.0920 ← final | 6.0871 ← final | — | 6.0885 ← final |
-| **w128 epoch loss** | **5.9181** | **5.8776** | pending | **5.9196** |
+| **w128 epoch loss** | **5.9181** | **5.8776** | **5.9133** | **5.9196** |
+| **BTM merge** | btm_w128_merged.pth (average of 4) | | | |
+| Post-merge ep11 (M4 only) | 5.8210 | | | |
+| Post-merge ep12 (M4 only) | **5.7632 ← final** | | | |
+
+### VRAM profile (batch=256, w128, bfloat16, no grad_checkpoint)
+Observed 19 GB peak on training run. Main contributors:
+| Component | Size |
+|---|---|
+| Model params (bfloat16) | 64 MB |
+| Adam m + v + fp32 master | ~384 MB |
+| Layer activations × 8 (fp32 intermediates) | ~2–3 GB |
+| Output logits [256, 128, 50,257] (bfloat16) | ~3.1 GB |
+| PyTorch allocator overhead | ~20–30% |
+
+The logits tensor alone is 50× the model size — dominates training memory and is not reduced by grad_checkpoint (it sits at the end of the network). Grad_checkpoint would save the layer activations (~2–3 GB) but not the logits. Grad-checkpoint experiment underway to measure actual saving.
+
+Inference (bfloat16, single sequence): ~100–150 MB → training/inference ratio ~**150×** (not 500×).
+
+Run 4 Chinchilla % (N = 32M total params, optimal = 640M tokens): effective tokens at run end ~505M = **~79% of Chinchilla optimal**.
 
 ### Diagram
 ![Run 4 BTM](run4_btm.svg)
@@ -709,7 +744,16 @@ In our runs, batch=160 (local) converged faster than batch=640–700 (server) at
 | Tokens trained | ~400M | 15T |
 | Estimated cost | electricity | ~$50M |
 
-Chinchilla-optimal tokens for 76M params: ~1.5B. This run reaches ~400M (27% of optimal).
+Chinchilla-optimal tokens (Hoffmann et al., total N including embeddings): 76M × 20 = **1.52B tokens**. This run reaches ~400M = **27% of Chinchilla optimal**.
+
+Run 3 Chinchilla % by phase (N = 76.5M total params, optimal = 1.53B tokens):
+
+| Phase | Cumulative tokens | Chinchilla % |
+|---|---|---|
+| Local w64 (5 epochs, WikiText-103) | ~520M | 34% |
+| + w128 server cont. (local lineage) | ~567M | 37% |
+| w256 BTM lineage (through sliding-slice end) | ~1,350M | 88% |
+
 The training loop is identical.
 
 ### Learnings
@@ -803,6 +847,7 @@ All four files live in `raw_data/`. Trainer.py validation mode (to be added) wil
 | Federated averaging of model weights | Communication-Efficient Learning of Deep Networks from Decentralized Data (FedAvg) | McMahan et al., Google | 2017 |
 | Weight averaging improves generalization | Model Soups: Averaging Weights of Fine-tuned Models Improves Accuracy | Wortsman et al. | 2022 |
 | Parallel training on data slices + merge | Branch-Train-Merge: Embarrassingly Parallel Training of Expert Language Models | Li et al., Meta | 2022 |
+| Context length scaling proportional to unique tokens seen | Intrinsic Entropy of Context Length Scaling in LLMs | Shi et al. | 2026 |
 
 ---
 

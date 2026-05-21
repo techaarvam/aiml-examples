@@ -106,3 +106,33 @@ float_type        = "bfloat16"
 grad_checkpoint   = false
 max_tokens        = 20000000
 tiktoken_encoding = "gpt2"
+
+# ── BTM w128 post-merge continuation · --start_epoch 11 · slice 2 (offset 40M) ─────
+[btm_w128_cont]
+_desc             = "BTM round 2 · w128 post-merge continuation · start_epoch 11 · slice 2 · fresh data"
+vecDims           = 256
+num_heads         = 4
+num_layers        = 8
+window_size       = 128
+batch_size        = 256
+epochs            = 15
+lr                = 0.0003
+float_type        = "bfloat16"
+grad_checkpoint   = false
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+
+# ── BTM w256 continuation · --start_epoch 13 · from btm_w256_ext.pth ─────
+[btm_w256_cont]
+_desc             = "BTM round 2 · w256 extension from btm_w256_ext.pth · start_epoch 13 · slice 2"
+vecDims           = 256
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 160
+epochs            = 15
+lr                = 0.0003
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"

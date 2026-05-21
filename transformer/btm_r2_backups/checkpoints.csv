@@ -1,5 +1,15 @@
-phase,machine,epoch,loss,window,model_file,date,notes
-w64_final,1,7,6.0920,64,model_step1_128_m1.pth,2026-05-20,w64 phase final — killed after saturation
-w64_final,2,7,6.0871,64,model_step1_128_m2.pth,2026-05-20,w64 phase final — killed after saturation
-w64_final,3,6,6.1099,64,model_step1_128_m3.pth,2026-05-20,w64 phase final — slow machine stopped at ep6
-w64_final,4,7,6.0885,64,model_step1_128_m4.pth,2026-05-20,w64 phase final — killed after saturation
+run,phase,machine,epoch,loss,window,local_pth,date,notes
+run4,w64_final,1,7,6.0920,64,model_step1_128_m1.pth,2026-05-20,w64 final — saturated — killed
+run4,w64_final,2,7,6.0871,64,model_step1_128_m2.pth,2026-05-20,w64 final — saturated — killed
+run4,w64_final,3,6,6.1099,64,model_step1_128_m3.pth,2026-05-20,w64 final — slow machine (180W cap) stopped at ep6
+run4,w64_final,4,7,6.0885,64,model_step1_128_m4.pth,2026-05-20,w64 final — saturated — killed
+run4,w64_ext,1,7,—,64,model_step1_128_ext_m1.pth,2026-05-20,posEmbedding interpolated 64→128 via extend_context.py
+run4,w64_ext,2,7,—,64,model_step1_128_ext_m2.pth,2026-05-20,posEmbedding interpolated 64→128 via extend_context.py
+run4,w64_ext,3,6,—,64,model_step1_128_ext_m3.pth,2026-05-20,posEmbedding interpolated 64→128 via extend_context.py
+run4,w64_ext,4,7,—,64,model_step1_128_ext_m4.pth,2026-05-20,posEmbedding interpolated 64→128 via extend_context.py
+run4,w128_branch,1,1,5.9181,128,model_w128_m1.pth,2026-05-20,w128 extension 1 epoch fresh optimizer — gs1 slice0
+run4,w128_branch,2,1,5.8776,128,model_w128_m2.pth,2026-05-20,w128 extension 1 epoch fresh optimizer — gs6 slice0
+run4,w128_branch,3,1,5.9133,128,model_w128_m3.pth,2026-05-20,w128 extension 1 epoch — ran on M4 — gs11 slice0
+run4,w128_branch,4,1,5.9196,128,model_w128_m4.pth,2026-05-20,w128 extension 1 epoch fresh optimizer — gs16 slice0
+run4,w128_merged,all,1,—,128,btm_w128_merged.pth,2026-05-20,BTM average of 4 w128 branch models — optimizer reset
+run4,w128_cont,m4,12,5.7632,128,btm_w128_cont.pth,2026-05-21,post-merge 2 epochs (ep11 loss=5.8210 ep12 loss=5.7632) — single machine M4 — slice2 offset40M — run done
