@@ -18,7 +18,8 @@ class DataInput():
 
     def __init__(self):
         self.vecDims = args.vecDims
-        common.vecDims = args.vecDims
+        common.vecDims   = args.vecDims
+        common.innerDims = args.inner_dims if args.inner_dims else args.vecDims
         self.wordVecs = {}
         common.wordVecs = {}
 

@@ -136,3 +136,20 @@ float_type        = "bfloat16"
 grad_checkpoint   = true
 max_tokens        = 20000000
 tiktoken_encoding = "gpt2"
+
+# ── BTM d384 continuation · --start_epoch 14 · inner_dims 256→384 expansion ─────
+# Start: model_d384.pth (32M→40M params, warm-start identity, from btm_w256_cont_ep13.pth ep13)
+[btm_d384_cont]
+_desc             = "BTM round 2 · w256 · inner_dims 384 expansion · start_epoch 14 · from model_d384.pth"
+vecDims           = 256
+inner_dims        = 384
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 160
+epochs            = 30
+lr                = 0.0003
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"

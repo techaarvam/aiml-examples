@@ -7,7 +7,8 @@ import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-vecDims = None  # set by DataInput after loading embeddings
+vecDims   = None  # set by DataInput after loading embeddings
+innerDims = None  # = vecDims normally; = args.inner_dims when dim-expansion is active
 vocabSize = None # in the training data, all the words are sorted and enumerated and indexed. 
                  #Larger training data is likely to have a larger vocabulary.
 

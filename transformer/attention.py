@@ -17,11 +17,11 @@ class Attention(nn.Module):
           # TBD: Experiment with scaling factors/distributions later 
 
           # Note: keys, query, value are the W_k, W_q, W_v
-        head_dim = common.vecDims // args.num_heads
+        head_dim = common.innerDims // args.num_heads
         scale = 1.0 / (head_dim ** 0.5)
-        self.keys  = nn.Parameter(torch.randn (args.num_heads, common.vecDims, head_dim) * scale)
-        self.query = nn.Parameter(torch.randn (args.num_heads, common.vecDims, head_dim) * scale)
-        self.value = nn.Parameter(torch.randn (args.num_heads, common.vecDims, head_dim) * scale)
+        self.keys  = nn.Parameter(torch.randn (args.num_heads, common.innerDims, head_dim) * scale)
+        self.query = nn.Parameter(torch.randn (args.num_heads, common.innerDims, head_dim) * scale)
+        self.value = nn.Parameter(torch.randn (args.num_heads, common.innerDims, head_dim) * scale)
 
         mask = torch.triu(torch.ones(args.window_size-1, args.window_size-1), diagonal=1).bool()
         self.register_buffer('mask', mask)

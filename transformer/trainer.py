@@ -64,6 +64,13 @@ if args.model_file:
         checkpoint = None  # old format, no optimizer/epoch state
         dbg_output(f"Loaded model from {args.model_file}")
 
+if args.inner_dims:
+    _freeze = {'embedding.weight', 'posEmbedding.weight', 'outputLinear.weight', 'outputLinear.bias'}
+    for name, param in transformer.named_parameters():
+        if name in _freeze:
+            param.requires_grad = False
+    dbg_output(f"Frozen: embedding, posEmbedding, outputLinear  (inner_dims={args.inner_dims})")
+
 if args.validate:
     import math
     if not args.model_file:

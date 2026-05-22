@@ -32,6 +32,8 @@ Hoffmann et al. (2022) explicitly counts embedding matrices in N ("Note that we 
 | Tokens / Params ratio | 0.78× | 12.5× |
 | Chinchilla optimal (20× total params) | — | **640M tokens** |
 
+> **Note:** Chinchilla's 20× was derived from models ≥70M params — applicability at 32M is uncertain. Also, 25.8M of 32M params here are the embedding table; the transformer core is only ~6M params.
+
 ### Config (btm_w64 profile)
 | Parameter | Value |
 |-----------|-------|
@@ -78,7 +80,8 @@ Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a sh
 | w64 saturate | 64 | ~405M (BTM-adj) | ~63% |
 | w128 branch + merge | 128 | ~465M | ~73% |
 | w128 post-merge | 128 | ~505M | ~79% |
-| **w256 continuation** | **256** | **in progress** | **>79%** |
+| w256 ep13 (M4 single) | 256 | ~525M | ~82% |
+| **d384 training (N=40M)** | **256** | **~525M start** | **~66% (N=40M)** |
 
 Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
 
@@ -91,7 +94,10 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 4. **BTM merge** — average weights across 4 machines → `btm_w128_merged.pth`
 5. **Post-merge continuation** — 2 epochs on single machine (M4), slice 2 offset 40M → ep11 loss 5.8210, ep12 loss 5.7632
 6. **extend_context.py** — interpolate posEmbedding 128→256, resize masks → `btm_w256_ext.pth`
-7. **w256 phase** — continuing ep13–15, batch=160, grad_checkpoint=true, single machine (M4)
+7. **w256 phase** — ep13 single machine (M4), slice 2 offset 40M, 124,999 batches → loss 5.6670
+8. **extend_dims.py** — inner transformer dimension 256→384, embeddings frozen, N: 32M→40M → `model_d384.pth`
+9. **d384 ep14** — btm_d384_cont profile, machine3 input_list, 1 epoch → loss 5.7343 — killed
+10. **d384 cold start** — btm_d384_cont profile, no pretrained weights, same input_list — control vs d384 warm-start
 
 ### Loss Log
 | | Machine 1 | Machine 2 | Machine 3 | Machine 4 |
@@ -110,6 +116,157 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 | Post-merge ep11 (M4 only) | 5.8210 | | | |
 | Post-merge ep12 (M4 only) | **5.7632 ← final** | | | |
 
+### Loss Log — w128 Continuation (ep11–12, May 20–21, 2026)
+
+**Epoch 11 loss log** (btm_w128_cont_20260520_152459, 78,125 steps)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,812 | 5.9943 |
+| 20% | 15,624 | 5.9308 |
+| 30% | 23,436 | 5.8991 |
+| 40% | 31,248 | 5.8788 |
+| 50% | 39,060 | 5.8638 |
+| 60% | 46,872 | 5.8522 |
+| 70% | 54,684 | 5.8426 |
+| 80% | 62,496 | 5.8344 |
+| 90% | 70,308 | 5.8273 |
+| 100% | 78,120 | 5.8211 |
+| **Epoch 11 final** | — | **5.8210** |
+
+**Epoch 12 loss log** (btm_w128_cont_20260520_235903, 78,125 steps)
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,812 | 5.8077 |
+| 20% | 15,624 | 5.7975 |
+| 30% | 23,436 | 5.7909 |
+| 40% | 31,248 | 5.7851 |
+| 50% | 39,060 | 5.7804 |
+| 60% | 46,872 | 5.7763 |
+| 70% | 54,684 | 5.7727 |
+| 80% | 62,496 | 5.7692 |
+| 90% | 70,308 | 5.7661 |
+| 100% | 78,120 | 5.7632 |
+| **Epoch 12 final** | — | **5.7632** |
+
+### Loss Log — w256 Continuation (ep13, May 21, 2026)
+
+**Setup**
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | btm_w256_ext.pth (extend_context 128→256 from btm_w128_cont.pth) |
+| Machine | M4 server (207.102.87.207) |
+| input_list | machine3 shards (gs12–gs15, slice 2 offset 40M) |
+| window_size | 256 |
+| float_type | bfloat16 |
+| grad_checkpoint | yes |
+| Steps/epoch | 124,999 |
+
+**Epoch 13 loss log**
+| Checkpoint | Loss |
+|------------|------|
+| 10% | 5.7935 |
+| 20% | 5.7396 |
+| 30% | 5.7166 |
+| 40% | 5.7029 |
+| 50% | 5.6933 |
+| 60% | 5.6858 |
+| 70% | 5.6799 |
+| 80% | 5.6749 |
+| 90% | 5.6706 |
+| **100%** | **5.6670** |
+
+LR held constant at 0.000300. Steady descent throughout.
+
+---
+
+### Inner Dimension Expansion — d384 (May 21, 2026)
+
+**Architecture change**
+
+Transformer core expanded 256→384 inner dims using a sandwich approach:
+- Frozen embedding [V, 256] and output projection [V, 256] remain untouched
+- Trainable upscale Linear[256→384] inserted after embedding lookup
+- Transformer blocks operate at 384 dims (8 layers, 4 heads, head_dim=96)
+- Trainable downscale Linear[384→256] inserted before output projection
+
+Warm-start: identity in the first 256×256 block, zeros elsewhere — preserves existing representations at init.
+
+| | Before | After |
+|--|--|--|
+| Inner dims | 256 | 384 |
+| Total params | ~32M | ~40M |
+| Trainable params | ~32M | ~14.4M |
+| Frozen params | 0 | ~25.8M |
+| Chinchilla N | 32M | 40M |
+| Chinchilla optimal | 640M | 800M |
+| Chinchilla % at ep13 end | ~82% | ~66% |
+
+Script: `extend_dims.py` run on server, output `model_d384.pth` (185 MB), epoch tag preserved as 13.
+
+**Training setup (btm_d384_cont profile)**
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | model_d384.pth (ep13, loss 5.6670) |
+| start_epoch | 14 |
+| vecDims | 256 |
+| inner_dims | 384 |
+| window_size | 256 |
+| batch_size | 160 |
+| lr | 0.0003 |
+| float_type | bfloat16 |
+| grad_checkpoint | yes |
+| max_tokens | 20,000,000 |
+| input_list | machine3 (gs12–gs15, slice 2 offset 40M) |
+
+**Loss Log — ep14 (May 22, 2026)**
+
+| Step | Checkpoint | Loss |
+|------|------------|------|
+| ~3,250 | 2.6% | 6.5000 |
+| 12,499 | 10% | 6.1643 |
+| 24,998 | 20% | 5.9641 |
+| 37,497 | 30% | 5.8832 |
+| 49,996 | 40% | 5.8373 |
+| 62,495 | 50% | 5.8071 |
+| 74,994 | 60% | 5.7852 |
+| 87,493 | 70% | 5.7685 |
+| 99,992 | 80% | 5.7550 |
+| 112,491 | 90% | 5.7438 |
+| 124,990 | 100% | **5.7343** |
+
+---
+
+### d384 Cold Start — Control Run (May 22, 2026)
+
+d384 architecture (inner_dims=384, 40M params) trained from random init on same data as the warm-started d384. Goal: isolate how much of the warm-start's loss curve is due to architecture capacity vs pre-training.
+
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | none (random init) |
+| Profile | btm_d384_cont |
+| vecDims | 256 |
+| inner_dims | 384 |
+| window_size | 256 |
+| batch_size | 160 |
+| lr | 0.0003 |
+| float_type | bfloat16 |
+| grad_checkpoint | yes |
+| max_tokens | 20,000,000 |
+| input_list | machine3 (gs12–gs15, slice 2 offset 40M) |
+
+**Loss Log — ep1**
+
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 12,499 | 8.5458 |
+| 20% | 24,998 | 8.3711 |
+| 30% | 37,497 | 8.2823 |
+| 40% | 49,996 | 8.2225 |
+| 50% | 62,495 | 8.1774 |
+| 60% | 74,994 | 8.1407 |
+
+---
+
 ### VRAM profile (batch=256, w128, bfloat16, no grad_checkpoint)
 Observed 19 GB peak on training run. Main contributors:
 | Component | Size |
@@ -124,7 +281,7 @@ The logits tensor alone is 50× the model size — dominates training memory and
 
 Inference (bfloat16, single sequence): ~100–150 MB → training/inference ratio ~**150×** (not 500×).
 
-Run 4 Chinchilla % (N = 32M total params, optimal = 640M tokens): effective tokens at run end ~505M = **~79% of Chinchilla optimal**.
+Run 4 Chinchilla % at ep13 end (N = 32M, optimal = 640M tokens): ~525M = **~82% of Chinchilla optimal**. After d384 expansion to N = 40M (optimal = 800M): same ~525M tokens = **~66% of Chinchilla optimal**.
 
 ### Diagram
 ![Run 4 BTM](run4_btm.svg)
@@ -296,6 +453,10 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 40% | 260,816 | 4.2383 |
 | 50% | 326,020 | 4.2381 |
 | 60% | 391,224 | 4.2380 |
+| 70% | 456,428 | 4.2379 |
+| 80% | 521,632 | 4.2380 |
+| 90% | 586,836 | 4.2379 |
+| 100% | 652,040 | 4.2379 |
 | **Epoch 5 final** | — | **4.2379** |
 
 ### Loss Log — Local w128 Adapt (epoch 6, lr=0.0003, input: adapt_wiki.txt, run high_20260518_161520)
@@ -310,7 +471,8 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | 70% | 22,386 | 3.9089 |
 | 80% | 25,584 | 3.8861 |
 | 90% | 28,782 | 3.8664 |
-| **Epoch 6 final** | 31,980 | **3.8488** |
+| 100% | 31,980 | 3.8489 |
+| **Epoch 6 final** | — | **3.8488** |
 
 Previous floor (w64 epoch 5): 4.2379 — breached at ~17%. Loss 4.0 breached at ~45%. Next step: w128→w256 adapt on cloud (adapt_wiki2.txt).
 
@@ -577,7 +739,7 @@ w256 continuation killed — loss oscillated without cumulative reduction. Final
 
 | Parameter | Value |
 |-----------|-------|
-| Starting checkpoint | high_20260518_161520 (loss 3.8488, w128) |
+| Starting checkpoint | model_epoch7_sequential_w128_adapted.pth (loss 4.9257, BTM lineage w128) |
 | window_size | 128 |
 | batch_size | 512 |
 | lr | 0.001 |
@@ -662,10 +824,10 @@ The vocabs were built independently from different corpora; they are not one der
 | model_local_w64 | scratch | vocab_local | **CLEAN** |
 | model_local_w128 | model_local_w64 | vocab_local | **CLEAN** |
 | model_server_w256_out2 | epoch 2 local (vocab_local embeddings) | vocab_server from BTM step 1 | **CORRUPTED at BTM start; partially recovered** |
-| model_server_w128 | model_local_w128 (vocab_local embeddings) | vocab_server | **CORRUPTED — confirmed** |
+| model_server_w128 | model_epoch7_sequential_w128_adapted.pth (vocab_server embeddings) | vocab_server | **CONSISTENT — continuation matched starting checkpoint vocab** |
 
-**model_server_w128 — confirmed mismatch**
-The downloaded `vocab.json` from run `w128_20260518_162121` matches `vocab_server` exactly. The starting checkpoint (`model_local_w128`) has an embedding table indexed for `vocab_local`. Every token ID fed into training was from a different mapping. Loss did reduce (3.85 start → 4.70 → 4.21 over 4 small epochs) but this reflects the model partially adapting to the scrambled mapping, not genuine improvement from the local baseline.
+**model_server_w128 — vocab consistent**
+The starting checkpoint `model_epoch7_sequential_w128_adapted.pth` was the BTM lineage w128 model (RTX 5090), which had trained throughout with vocab_server. Server continuation training also used vocab_server. Both the starting weights and all training data were aligned to vocab_server — the continuation is internally consistent. Loss fell from 4.9257 → 4.7026 → 4.3366 → 4.2110 across 4 server epochs (~10M tokens each).
 
 **model_server_w256_out2 — corrupted at BTM, partially recovered**
 The DataInput.py bug hit at the first batch of BTM training: each branch rebuilt vocab from its OWT data slice. After the merge and many more training steps (epoch 7 sequential + w128 + w256 + sliding-slice runs), the model trained consistently on vocab_server. Whether the merge across branches was clean (all 4 branches having the same vocab_server despite different slices) or slightly noisy (rare tokens near the 50k cutoff differing between slices) is unverifiable — branch checkpoints are gone. The oscillatory loss in the w256 sliding-slice runs may be partly attributable to this misalignment from the corrupted starting point.
@@ -674,8 +836,8 @@ The DataInput.py bug hit at the first batch of BTM training: each branch rebuilt
 All server loss numbers are retained. They are real measurements of how well the model predicted tokens under the vocab mapping it was actually trained with — not evidence of correct generalisation from the starting checkpoint.
 
 **Redo assessment**
-- `model_server_w128`: clear redo candidate. Only 4 small epochs, confirmed mismatch, negligible cost to restart. Fix: pin `vocab_local.json` explicitly in the server config and verify it propagates correctly before starting.
-- `model_server_w256_out2`: larger cost. Redoing the full BTM (4 × 3 epochs on cloud machines) plus sequential + context extension runs. The model may still serve as a useful study in vocab-mismatched training; whether to redo depends on whether a clean w256 result is needed.
+- `model_server_w128`: only 4 short epochs (~10M tokens each, ~40M total) from the BTM w128 starting point. Vocab is consistent throughout. A continuation would extend from loss 4.211 with ~774M cumulative tokens.
+- `model_server_w256_out2`: initial corruption happened at BTM start (branches rebuilt vocab from OWT slices, 4 × 1 epoch each). After the merge and subsequent training the model trained consistently on vocab_server. The oscillatory loss in the w256 sliding-slice runs may be partly attributable to the initial vocab misalignment. Current state: ~824M cumulative tokens, loss ~4.75.
 
 ---
 
@@ -750,9 +912,12 @@ Run 3 Chinchilla % by phase (N = 76.5M total params, optimal = 1.53B tokens):
 
 | Phase | Cumulative tokens | Chinchilla % |
 |---|---|---|
-| Local w64 (5 epochs, WikiText-103) | ~520M | 34% |
-| + w128 server cont. (local lineage) | ~567M | 37% |
-| w256 BTM lineage (through sliding-slice end) | ~1,350M | 88% |
+| local_w64 (5 epochs, WikiText-103) | ~520M | 34% |
+| local_w128 (+ w128 adapt) | ~525M | 34% |
+| server_w128 (BTM lineage + server continuation) | ~774M | 51% |
+| server_w256_out2 (BTM lineage through sliding-slice end) | ~824M | 54% |
+
+> **Note:** Chinchilla's 20× was derived from models ≥70M params — applicability at this scale is uncertain. Also, ~51M of 76M params are the embedding + output projection layers; the transformer core is only ~25M params.
 
 The training loop is identical.
 

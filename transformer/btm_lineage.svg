@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="700" height="790" font-family="system-ui,sans-serif" font-size="12">
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="800" font-family="system-ui,sans-serif" font-size="12">
   <defs>
     <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
       <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
     </marker>
   </defs>
 
-  <rect width="700" height="790" fill="#f8fafc"/>
+  <rect width="880" height="800" fill="#f8fafc"/>
 
   <!-- Title -->
   <text x="350" y="28" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f172a">BTM Training Lineage</text>
@@ -65,7 +65,16 @@
   <text x="350" y="386" text-anchor="middle" font-size="13" font-weight="600" fill="#4a044e">Context Adapt · w64→w128 · epoch_7 1/10th · RTX 5090</text>
   <text x="350" y="406" text-anchor="middle" fill="#374151">loss 5.01 → 4.93  ·  ppl 150 → 138</text>
 
-  <!-- arrow -->
+  <!-- server_w128 branch fork (right side) -->
+  <line x1="640" y1="392" x2="718" y2="392" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arr)"/>
+  <rect x="720" y="362" width="150" height="88" rx="5" fill="#fce7f3" stroke="#f9a8d4" stroke-width="1.5"/>
+  <text x="795" y="378" text-anchor="middle" font-size="11" font-weight="600" fill="#831843">server_w128</text>
+  <text x="795" y="392" text-anchor="middle" font-size="10" fill="#374151">4 epochs · ~40M tokens</text>
+  <text x="795" y="406" text-anchor="middle" font-size="9" fill="#374151">ep1: —  ·  ep2: 4.7026</text>
+  <text x="795" y="420" text-anchor="middle" font-size="9" fill="#374151">ep3: 4.3366  ·  ep4: 4.2110</text>
+  <text x="795" y="436" text-anchor="middle" font-size="10" fill="#64748b">~774M total · 51% Chinchilla</text>
+
+  <!-- arrow (main line continues to w256) -->
   <line x1="350" y1="421" x2="350" y2="443" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- ── w128→w256 adapt ── -->
@@ -96,9 +105,10 @@
   <line x1="350" y1="661" x2="350" y2="683" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
 
   <!-- ── Stable pass ── -->
-  <rect x="60" y="683" width="500" height="58" rx="6" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="1.5"/>
+  <rect x="60" y="683" width="500" height="72" rx="6" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="1.5"/>
   <text x="310" y="706" text-anchor="middle" font-size="13" font-weight="600" fill="#0c4a6e">Stable pass · unmodified slices · loss descent</text>
   <text x="310" y="726" text-anchor="middle" fill="#374151">loss ~4.75 → lower  ·  ppl ~116 → lower</text>
+  <text x="310" y="745" text-anchor="middle" font-size="10" fill="#64748b">~824M total tokens · 54% Chinchilla</text>
   <!-- output 2 badge -->
   <rect x="568" y="691" width="72" height="24" rx="4" fill="#0284c7"/>
   <text x="604" y="707" text-anchor="middle" font-size="11" font-weight="bold" fill="white">output 2</text>

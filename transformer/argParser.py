@@ -37,16 +37,18 @@ def parse_args():
         help='Enable gradient checkpointing per transformer layer (saves activation memory, costs ~30% extra compute)')
     parser.add_argument('--max_tokens', type=int, default=None,
         help='Cap dataset to first N tokens per shard (applied after cache load; cache always stores full data)')
-    parser.add_argument('--sampler', type=str, default='min_p', choices=['min_p', 'top_k', 'top_p'],
-        help='Sampling strategy for inference: min_p (default), top_k, top_p')
-    parser.add_argument('--temperature', type=float, default=1.0,
-        help='Sampling temperature — scales logits before sampling (default 1.0)')
+    parser.add_argument('--sampler', type=str, default='top_p', choices=['min_p', 'top_k', 'top_p'],
+        help='Sampling strategy for inference: top_p (default), min_p, top_k')
+    parser.add_argument('--temperature', type=float, default=0.8,
+        help='Sampling temperature — scales logits before sampling (default 0.8)')
     parser.add_argument('--top_k', type=int, default=50,
         help='k for top_k sampler (default 50)')
-    parser.add_argument('--top_p', type=float, default=0.9,
-        help='Nucleus probability for top_p sampler (default 0.9)')
+    parser.add_argument('--top_p', type=float, default=0.8,
+        help='Nucleus probability for top_p sampler (default 0.8)')
     parser.add_argument('--min_p', type=float, default=0.05,
         help='Min-p threshold: fraction of top-token prob below which tokens are dropped (default 0.05)')
+    parser.add_argument('--inner_dims', type=int, default=None,
+        help='Expanded inner transformer dimension (d’). When set, frozen embedding/output adapters bridge vecDims→inner_dims. Use extend_dims.py to create the starting checkpoint.')
     return parser.parse_args()
 
 args = parse_args()
