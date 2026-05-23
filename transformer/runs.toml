@@ -153,3 +153,41 @@ float_type        = "bfloat16"
 grad_checkpoint   = true
 max_tokens        = 20000000
 tiktoken_encoding = "gpt2"
+
+# ── BTM d512 continuation · --start_epoch 15 · inner_dims 384→512 expansion ─────
+# Start: model_d512.pth (40M→51M params, warm-start identity, from btm_d384_cont ep14)
+[btm_d512_cont]
+_desc             = "BTM round 2 · w256 · inner_dims 512 expansion · start_epoch 15 · from model_d512.pth"
+vecDims           = 256
+inner_dims        = 512
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 1024
+epochs            = 30
+lr                = 0.003
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+
+# ── BTM d512 local continuation · start_epoch 16 · RTX 5070 12GB ─────
+# Resume from ep15 local backup (loss 5.7338).
+# Run: python runner.py runs.toml btm_d512_cont_local \
+#          --resume --start_epoch 16 \
+#          --model_file btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model.pth
+[btm_d512_cont_local]
+_desc             = "BTM round 2 · d512 local cont · ep16+ · RTX 5070 12GB · from ep15 backup"
+vecDims           = 256
+inner_dims        = 512
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 256
+epochs            = 30
+lr                = 0.0003
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"

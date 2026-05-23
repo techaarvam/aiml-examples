@@ -75,13 +75,16 @@ Hoffmann et al. (2022) explicitly counts embedding matrices in N ("Note that we 
 ### Hypothesis: Intrinsic Entropy of Context Length Scaling
 Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a short context until near saturation, then interpolate to a longer window and continue with fresh data. The idea is that context length should grow roughly in proportion to the volume of unique tokens seen — the model earns longer context by first learning well at a shorter one. Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
 
-| Stage | Window | Unique tokens seen (approx) | Chinchilla % (N=32M) |
-|---|---|---|---|
-| w64 saturate | 64 | ~405M (BTM-adj) | ~63% |
-| w128 branch + merge | 128 | ~465M | ~73% |
-| w128 post-merge | 128 | ~505M | ~79% |
-| w256 ep13 (M4 single) | 256 | ~525M | ~82% |
-| **d384 training (N=40M)** | **256** | **~525M start** | **~66% (N=40M)** |
+| Stage | Window | N (params) | Chinchilla optimal | Tokens seen | Chinchilla % |
+|---|---|---|---|---|---|
+| w64 saturate | 64 | 32M | 640M | ~405M | ~63% |
+| w128 branch + merge | 128 | 32M | 640M | ~465M | ~73% |
+| w128 post-merge ep12 | 128 | 32M | 640M | ~505M | ~79% |
+| w256 ep13 | 256 | 32M | 640M | ~525M | ~82% |
+| extend_dims 256→384 | — | 32M→40M | 640M→800M | ~525M | ~66% ↓ |
+| d384 ep14 | 256 | 40M | 800M | ~545M | ~68% |
+| extend_dims 384→512 | — | 40M→51M | 800M→1,020M | ~545M | ~53% ↓ |
+| d512 ep15 | 256 | 51M | 1,020M | ~565M | ~55% |
 
 Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
 
@@ -98,6 +101,9 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 8. **extend_dims.py** — inner transformer dimension 256→384, embeddings frozen, N: 32M→40M → `model_d384.pth`
 9. **d384 ep14** — btm_d384_cont profile, machine3 input_list, 1 epoch → loss 5.7343 — killed
 10. **d384 cold start** — btm_d384_cont profile, no pretrained weights, same input_list — control vs d384 warm-start
+11. **extend_dims.py** — inner transformer dimension 384→512, N: 40M→51M → `model_d512.pth` (from d384 ep14 checkpoint)
+12. **d512 ep15** — btm_d512_cont profile, machine3 input_list, from model_d512.pth — in progress
+13. **d384 ep15 cont** — btm_d384_cont profile, continuing from d384 ep14 checkpoint — killed, superseded by d512
 
 ### Loss Log
 | | Machine 1 | Machine 2 | Machine 3 | Machine 4 |
@@ -264,6 +270,41 @@ d384 architecture (inner_dims=384, 40M params) trained from random init on same 
 | 40% | 49,996 | 8.2225 |
 | 50% | 62,495 | 8.1774 |
 | 60% | 74,994 | 8.1407 |
+| 70% | 87,493 | 8.1100 |
+| 80% | 99,992 | 8.0834 |
+| 90% | 112,491 | 8.0599 |
+| 100% | 124,990 | 8.0388 |
+| **Epoch 1 final** | — | **8.0388** |
+
+---
+
+### d512 Continuation — ep15 (May 22, 2026)
+
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | model_d512.pth (extend_dims 384→512 from d384 ep14, loss 5.7343) |
+| Profile | btm_d512_cont |
+| inner_dims | 512 |
+| batch_size | 1280 |
+| Steps/epoch | 15,625 |
+| input_list | machine3 (gs12–gs15, slice 2 offset 40M) |
+
+**Local backup**: `btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model.pth`
+
+**Loss Log — ep15**
+
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 1,562 | 6.4423 |
+| 20% | 3,124 | 6.1993 |
+| 30% | 4,686 | 6.0597 |
+| 40% | 6,248 | 5.9673 |
+| 50% | 7,810 | 5.9022 |
+| 60% | 9,372 | 5.8532 |
+| 70% | 10,934 | 5.8146 |
+| 80% | 12,496 | 5.7828 |
+| 90% | 14,058 | 5.7565 |
+| **100%** | **15,620** | **5.7338** |
 
 ---
 
@@ -475,6 +516,17 @@ Note: OOM occurred during epoch 1, resumed cleanly from checkpoint.
 | **Epoch 6 final** | — | **3.8488** |
 
 Previous floor (w64 epoch 5): 4.2379 — breached at ~17%. Loss 4.0 breached at ~45%. Next step: w128→w256 adapt on cloud (adapt_wiki2.txt).
+
+### Chinchilla — Local Run3 (N=76M, optimal=1,520M)
+
+| Phase | Input | Est. tokens | Cumulative | Chinchilla % | Loss |
+|---|---|---|---|---|---|
+| Local ep1 | wikitext103.txt | 104.3M | 104M | 7% | 4.5536 |
+| Local ep2 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.3398 |
+| Local ep3 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.3126 |
+| Local ep4 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.2968 |
+| Local ep5 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.2379 |
+| Local ep6 w128 adapt | adapt_wiki.txt | ~5.3M | 109M | 7% | 3.8488 |
 
 ### Gradient Checkpointing Experiment (May 2026)
 
@@ -906,18 +958,42 @@ In our runs, batch=160 (local) converged faster than batch=640–700 (server) at
 | Tokens trained | ~400M | 15T |
 | Estimated cost | electricity | ~$50M |
 
-Chinchilla-optimal tokens (Hoffmann et al., total N including embeddings): 76M × 20 = **1.52B tokens**. This run reaches ~400M = **27% of Chinchilla optimal**.
-
-Run 3 Chinchilla % by phase (N = 76.5M total params, optimal = 1.53B tokens):
-
-| Phase | Cumulative tokens | Chinchilla % |
-|---|---|---|
-| local_w64 (5 epochs, WikiText-103) | ~520M | 34% |
-| local_w128 (+ w128 adapt) | ~525M | 34% |
-| server_w128 (BTM lineage + server continuation) | ~774M | 51% |
-| server_w256_out2 (BTM lineage through sliding-slice end) | ~824M | 54% |
+Chinchilla-optimal tokens (Hoffmann et al., total N including embeddings): 76M × 20 = **1,520M tokens**.
 
 > **Note:** Chinchilla's 20× was derived from models ≥70M params — applicability at this scale is uncertain. Also, ~51M of 76M params are the embedding + output projection layers; the transformer core is only ~25M params.
+
+**Table 1 — Main lineage → server_w128 (N=76M, optimal=1,520M)**
+
+| Phase | Input | Est. tokens | Cumulative | Chinchilla % | Loss |
+|---|---|---|---|---|---|
+| Local ep1 | wikitext103.txt | 104.3M | 104M | 7% | 4.5536 |
+| Local ep2 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.3398 |
+| Local ep3 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.3126 |
+| Local ep4 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.2968 |
+| Local ep5 | wikitext103.txt | 0 (repeat) | 104M | 7% | 4.2379 |
+| Local ep6 w128 adapt | adapt_wiki.txt | ~5.3M | 109M | 7% | 3.8488 |
+| BTM branch A | epoch_3.txt | ~104M | 213M | 14% | — |
+| BTM branch B | epoch_4.txt | ~104M | 317M | 21% | — |
+| BTM branch C | epoch_5.txt | ~104M | 421M | 28% | — |
+| BTM branch D | epoch_6.txt | ~104M | 525M | 35% | — |
+| Sequential ep7 | epoch_7.txt | ~104M | 629M | 41% | 5.0533 |
+| 3090 w128 partial (3.3%) | epoch_7.txt | ~3.4M | 632M | 42% | — |
+| 5090 w128 adapt | epoch_7_adapt (1/10th) | ~10.4M | 643M | 42% | 4.9257 |
+| Server w128 cont ep1 | epoch_9 (1/10th) | ~10.4M | 653M | 43% | — |
+| Server w128 cont ep2 | epoch_10 (1/10th) | ~10.4M | 663M | 44% | 4.7026 |
+| Server w128 cont ep3 | epoch_8 (1/10th) | ~10.4M | 674M | 44% | 4.3366 |
+| Server w128 cont ep4 | epoch_9 (1/10th) | ~10.4M | 684M | **45%** | 4.2110 |
+
+**Table 2 — 5090 w256 branch (separate lineage, base at 643M cumulative)**
+
+| Phase | Input | Est. tokens | Cumulative | Chinchilla % | Loss |
+|---|---|---|---|---|---|
+| w256 epoch_7_adapt sl1 | epoch_7_adapt (1/10th) | ~10.4M | 653M | 43% | 4.7235 |
+| w256 epoch_8 sl1 | epoch_8 (1/10th) | ~10.4M | 663M | 44% | 4.7670 |
+| w256 epoch_9 sl1 | epoch_9 (1/10th) | ~10.4M | 674M | 44% | 4.7674 |
+| w256 epoch_10 sl1 | epoch_10 (1/10th) | ~10.4M | 684M | 45% | 4.7717 |
+| w256 epoch_7_adapt sl2 | epoch_7_adapt (2/10th) | ~10.4M | 694M | 46% | 4.7535 |
+| w256 epoch_8 sl2 (60%) | epoch_8 (2/10th, partial) | ~6.3M | 700M | **46%** | — |
 
 The training loop is identical.
 

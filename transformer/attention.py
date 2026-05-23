@@ -30,6 +30,15 @@ class Attention(nn.Module):
         # X is of shape batch_size, num_heads, window_size, vecDim
         # X is already unsqueezed and num_heads expanded before we get it
     def forward(self, X):
+
+        #Claude sugggested changing this to use einsum.
+     
+        # when normedX expansion calls einsim instead of this current code.
+        #   X will be read H times, since cuBLAS sees [B S I ] @ [H I D] as a loop 
+        #   over H, each using the same X in-place
+        #   but cuda compile is called, so the claim of improvement may be close to zero or non-existent. 
+        #   expecting cuda compile to take care of forward optimising.
+
         Q = X @ self.query
         K = X @ self.keys
         V = X @ self.value

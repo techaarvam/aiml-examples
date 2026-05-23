@@ -15,6 +15,7 @@ from argParser import *
 import common
 import multihead
 
+from torch.profiler import profile, ProfilerActivity, schedule
 
 from seeder import *
 from torch import nn
@@ -30,6 +31,9 @@ set_verbosity (args.verbosity)
 common.dtype = {'float32': torch.float32, 'float16': torch.float16,
                 'bfloat16': torch.bfloat16, 'float8': torch.float8_e4m3fn}[args.float_type]
 
+torch.set_float32_matmul_precision('high')
+
+
 def _resolve_input_files():
     if args.input_list:
         if args.input_list.endswith('.json'):
@@ -41,8 +45,10 @@ def _resolve_input_files():
 _input_files = _resolve_input_files()
 _cycling     = _input_files is not None
 
-args.input = _input_files[0] if _cycling else args.input
-dIn = DataInput.DataInput()   
+if _cycling:
+    _init_epoch = (args.start_epoch - 1) if args.start_epoch is not None else 0
+    args.input = _input_files[_init_epoch % len(_input_files)]
+dIn = DataInput.DataInput()
 
 transformer = multihead.MultiHead ().to(common.device).to(common.dtype)
 total_params = sum(p.numel() for p in transformer.parameters())
@@ -55,11 +61,13 @@ checkpoint = None
 if args.model_file:
     checkpoint = torch.load(args.model_file, map_location=common.device)
     if isinstance(checkpoint, dict) and 'model' in checkpoint:
-        transformer.load_state_dict(checkpoint['model'])
+        state_dict = {k.replace('_orig_mod.', ''): v for k, v in checkpoint['model'].items()}
+        transformer.load_state_dict(state_dict)
         transformer = transformer.to(common.dtype)
         dbg_output(f"Loaded model from {args.model_file} (saved after epoch {checkpoint.get('epoch', '?')})")
     else:
-        transformer.load_state_dict(checkpoint)
+        state_dict = {k.replace('_orig_mod.', ''): v for k, v in checkpoint.items()}
+        transformer.load_state_dict(state_dict)
         transformer = transformer.to(common.dtype)
         checkpoint = None  # old format, no optimizer/epoch state
         dbg_output(f"Loaded model from {args.model_file}")
@@ -70,6 +78,11 @@ if args.inner_dims:
         if name in _freeze:
             param.requires_grad = False
     dbg_output(f"Frozen: embedding, posEmbedding, outputLinear  (inner_dims={args.inner_dims})")
+
+if not args.validate:
+    torch._dynamo.config.capture_scalar_outputs = True
+    transformer = torch.compile(transformer, mode="default")
+    dbg_output("torch.compile: default mode")
 
 if args.validate:
     import math
@@ -107,9 +120,7 @@ if args.validate:
     sys.exit(0)
 
 if not args.model_file or args.resume:
-    if args.output_type == "indices":
-        loss_fn = nn.CrossEntropyLoss()
-    else:
+    if args.output_type != "indices":
         loss_fn = nn.MSELoss()
 
     if args.optimizer == "adam":
@@ -130,6 +141,14 @@ if not args.model_file or args.resume:
         start_epoch = args.start_epoch - 1
         dbg_output(f"Starting epoch overridden to {args.start_epoch}")
 
+    if _cycling:
+        _correct_file = _input_files[start_epoch % len(_input_files)]
+        if _correct_file != args.input:
+            args.input      = _correct_file
+            args.cache_file = None
+            dIn             = DataInput.DataInput()
+            dbg_output(f"Pre-loaded input [{start_epoch % len(_input_files) + 1}/{len(_input_files)}]: {_correct_file}")
+
     if args.lr_schedule == 'plateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5, threshold=1e-3)
     elif args.lr_schedule == 'cosine':
@@ -145,81 +164,105 @@ if not args.model_file or args.resume:
     heartbeat_every = max(1, total_batches // 10)
     _current_file = args.input if _cycling else None
 
-    for i in range(start_epoch, args.epochs):
-        if _cycling:
-            epoch_file = _input_files[i % len(_input_files)]
-            if epoch_file != _current_file:
-                _current_file   = epoch_file
-                args.input      = epoch_file
-                args.cache_file  = None
-                args.start_epoch = i
-                dbg_output(f"Input [{i % len(_input_files) + 1}/{len(_input_files)}]: {epoch_file}")
-                dIn             = DataInput.DataInput()
-                train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
-                total_batches   = len(train_loader)
-                heartbeat_every = max(1, total_batches // 10)
-        dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
-        total_loss  = 0.0
-        num_batches = 0
-        epoch_start = time.time()
 
-        loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
-                      if interactive else train_loader
-        for arg1, arg2, arg3 in loader_iter:
-            if args.embedding_type == "glove-fixed":
-                dInputs        = arg1.to(common.device).to(common.dtype)
-                dLabels        = arg2.to(common.device).to(common.dtype)
-                dTargetIndices = arg3.to(common.device)
-            else:
-                dInputs        = arg1.to(common.device)
-                dLabels        = None
-                dTargetIndices = arg3.to(common.device)
+    with profile ( activities=[ ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                   schedule = schedule(wait=2, warmup=1, active=3),
+                   record_shapes = True,
+                   profile_memory = True,
+                   with_stack = True ) as prof:
 
-            optimizer.zero_grad()
-            output = transformer.forward(dInputs)
-            assert not output.isnan().any(), f"NaN in forward pass: max={output.abs().max()}"
-            if args.output_type == "indices":
-                B, S, V = output.shape
-                loss = loss_fn(output.reshape(B * S, V), dTargetIndices.reshape(B * S))
-            elif args.output_type == "vecs":
-                loss = loss_fn(output, dLabels[...,:-1])
 
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(transformer.parameters(), 1.0)
-            optimizer.step()
+        for i in range(start_epoch, args.epochs):
+            if _cycling:
+                epoch_file = _input_files[i % len(_input_files)]
+                if epoch_file != _current_file:
+                    _current_file   = epoch_file
+                    args.input      = epoch_file
+                    args.cache_file  = None
+                    args.start_epoch = i
+                    dbg_output(f"Input [{i % len(_input_files) + 1}/{len(_input_files)}]: {epoch_file}")
+                    dIn             = DataInput.DataInput()
+                    train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+                    total_batches   = len(train_loader)
+                    heartbeat_every = max(1, total_batches // 10)
+            dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
+            total_loss  = 0.0
+            num_batches = 0
+            epoch_start = time.time()
+    
+            loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
+                          if interactive else train_loader
 
-            total_loss  += loss.item()
-            num_batches += 1
+            for arg1, arg2, arg3 in loader_iter:
+                if args.embedding_type == "glove-fixed":
+                    dInputs        = arg1.to(common.device).to(common.dtype)
+                    dLabels        = arg2.to(common.device).to(common.dtype)
+                    dTargetIndices = arg3.to(common.device)
+                else:
+                    dInputs        = arg1.to(common.device)
+                    dLabels        = None
+                    dTargetIndices = arg3.to(common.device)
 
-            if not interactive and num_batches % heartbeat_every == 0:
-                dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+                optimizer.zero_grad()
+            
+                if args.output_type == "indices":
+                    loss = transformer.forward(dInputs, dTargetIndices)
+                    if isinstance(loss, torch.Tensor):
+                        loss.backward()
+                        loss = loss.item()
+                elif args.output_type == "vecs":
+                    output = transformer.forward(dInputs)
+                    assert not output.isnan().any(), f"NaN in forward pass: max={output.abs().max()}"
+                    loss_t = loss_fn(output, dLabels[...,:-1])
+                    loss_t.backward()
+                    loss = loss_t.item()
+                torch.nn.utils.clip_grad_norm_(transformer.parameters(), 1.0)
+                optimizer.step()
+                prof.step()
 
-            if progress_file:
-                elapsed   = time.time() - epoch_start
-                rate      = num_batches / elapsed
-                remaining = (total_batches - num_batches) / rate
-                lr_cur    = optimizer.param_groups[0]['lr']
-                with open(progress_file, 'w') as pf:
-                    pf.write(
-                        f"Epoch    : {i+1} / {args.epochs}\n"
-                        f"Batch    : {num_batches} / {total_batches}  ({100*num_batches/total_batches:.1f}%)\n"
-                        f"Loss     : {total_loss/num_batches:.4f}\n"
-                        f"LR       : {lr_cur:.6f}\n"
-                        f"Rate     : {rate:.1f} batches/sec\n"
-                        f"Elapsed  : {elapsed/60:.1f} min\n"
-                        f"ETA epoch: {remaining/60:.1f} min\n"
-                        f"Updated  : {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    )
+                total_loss  += loss
+                num_batches += 1
+    
+                if not interactive and num_batches % heartbeat_every == 0:
+                    dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
 
-        dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
-        if scheduler:
-            if args.lr_schedule == 'plateau':
-                scheduler.step(total_loss/num_batches)
-            else:
-                scheduler.step()
-            dbg_output(f" LR={optimizer.param_groups[0]['lr']:.6f}")
-        torch.save({'model': transformer.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': i+1}, args.save_model)
-        dbg_output(f"Checkpoint saved to {args.save_model}")
+                if progress_file:
+                    elapsed   = time.time() - epoch_start
+                    rate      = num_batches / elapsed
+                    remaining = (total_batches - num_batches) / rate
+                    lr_cur    = optimizer.param_groups[0]['lr']
+                    with open(progress_file, 'w') as pf:
+                        pf.write(
+                            f"Epoch    : {i+1} / {args.epochs}\n"
+                            f"Batch    : {num_batches} / {total_batches}  ({100*num_batches/total_batches:.1f}%)\n"
+                            f"Loss     : {total_loss/num_batches:.4f}\n"
+                            f"LR       : {lr_cur:.6f}\n"
+                            f"Rate     : {rate:.1f} batches/sec\n"
+                            f"Elapsed  : {elapsed/60:.1f} min\n"
+                            f"ETA epoch: {remaining/60:.1f} min\n"
+                            f"Updated  : {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        )
+
+ 
+
+            dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
+            if scheduler:
+                if args.lr_schedule == 'plateau':
+                    scheduler.step(total_loss/num_batches)
+                else:
+                    scheduler.step()
+                dbg_output(f" LR={optimizer.param_groups[0]['lr']:.6f}")
+
+            # End of batch inner loop
+
+        # End of Epoch Loop
+
+
+    dbg_output(prof.key_averages(group_by_input_shape=True).table(sort_by="cuda_time_total", row_limit = 20))
+    dbg_output(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit = 20))
+    prof.export_chrome_trace("trace.json")
+    torch.save({'model': transformer.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': i+1}, args.save_model)
+    dbg_output(f"Checkpoint saved to {args.save_model}")
 
 
 def sample_token(logits):

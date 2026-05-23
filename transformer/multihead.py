@@ -63,10 +63,13 @@ class MultiHead (nn.Module):
     def _layer_forward(self, X, layer):
         normedX = self.normalize(X, self.norm1[layer],
             (self.learnedMeanShift1[layer], self.learnedStdScale1[layer]) if args.use_custom_norm else None)
+
         attentionOutput = normedX.unsqueeze(1).expand(-1, args.num_heads, -1, common.innerDims)
         attentionOutput = self.attentionHeads[layer].forward(attentionOutput)
         attentionOutput = attentionOutput.permute(0, 2, 1, 3).flatten(start_dim=2)
         attentionOutput = attentionOutput @ self.Wo[layer]
+
+
         X = X + attentionOutput
         normedX = self.normalize(X, self.norm2[layer],
             (self.learnedMeanShift2[layer], self.learnedStdScale2[layer]) if args.use_custom_norm else None)
@@ -88,19 +91,15 @@ class MultiHead (nn.Module):
         return normedX
 
 
-    def forward (self, X):
-        #Shape Notes:
-         # X is batch_size, window_size, vecDim
-         # its expanded to include num_heads
-
+    def forward(self, X, targets=None, chunk_size=8192):
         positions = torch.arange(X.shape[1], device=X.device)
         if args.embedding_type == "glove-fixed":
-            X = X + self.posEmbedding(positions)          # X is float GloVe vecs
+            X = X + self.posEmbedding(positions)
         else:
-            X = self.embedding(X) + self.posEmbedding(positions)  # X is long indices
+            X = self.embedding(X) + self.posEmbedding(positions)
         if hasattr(self, 'upscale'):
             X = self.upscale(X)
-        for layer in range (0, args.num_layers):
+        for layer in range(0, args.num_layers):
             if args.grad_checkpoint and self.training:
                 fn = lambda X, l=layer: self._layer_forward(X, l)
                 X = ckpt(fn, X, use_reentrant=False)
@@ -108,8 +107,47 @@ class MultiHead (nn.Module):
                 X = self._layer_forward(X, layer)
         if hasattr(self, 'downscale'):
             X = self.downscale(X)
-        if (args.output_type == "indices"):
+        if targets is None:
             return self.outputLinear(X)
-        elif (args.output_type == "vecs"):
-            return self.outputLinear(X)
+        flat_h = X.reshape(-1, X.shape[-1])
+        flat_t = targets.reshape(-1)
+        n      = flat_h.shape[0]
+        ce     = nn.CrossEntropyLoss(reduction='sum')
+        if not self.outputLinear.weight.requires_grad:
+            # outputLinear frozen: surrogate trick — one backward pass through transformer
+            W      = self.outputLinear.weight.float()
+            with torch.no_grad():
+                total  = torch.zeros(1, device=flat_h.device)
+                grad_h = torch.zeros_like(flat_h)
+                for start in range(0, n, chunk_size):
+                    end    = min(start + chunk_size, n)
+                    logits = flat_h[start:end].float() @ W.T
+                    if self.outputLinear.bias is not None:
+                        logits += self.outputLinear.bias.float()
+                    total += ce(logits, flat_t[start:end])
+                    # in-place stable softmax — avoids a second [chunk, V] allocation
+                    logits.sub_(logits.max(dim=-1, keepdim=True).values).exp_()
+                    logits.div_(logits.sum(dim=-1, keepdim=True))
+                    logits[torch.arange(end - start, device=flat_h.device), flat_t[start:end]] -= 1.0
+                    logits.div_(n)
+                    grad_h[start:end] = (logits @ W).to(flat_h.dtype)
+            # This trick is done to do gradient propogation as one flow
+            # instead of looping through each chunk.
+            # Chunked cross entropy is done only at the output linear step. Only for loop
+            # The cross-entropy on the entire vocabulary * batch-size * seq_len is a huge tensor
+            # prevents running out of VRAM in consumer hardware. 
+            # May be need even in data-center runs to allow running multiple processes in parallel that use VRAM 
+            # effectively
+
+            surrogate = (flat_h * grad_h).sum()
+            return surrogate + (total / n - surrogate).detach()
+        else:
+            # outputLinear trainable: per-chunk backward so weight grads accumulate correctly
+            loss = 0.0
+            for start in range(0, n, chunk_size):
+                end        = min(start + chunk_size, n)
+                chunk_loss = ce(self.outputLinear(flat_h[start:end]).float(), flat_t[start:end]) / n
+                chunk_loss.backward(retain_graph=(end < n))
+                loss += chunk_loss.item()
+            return loss
 

@@ -122,17 +122,23 @@ write_sh(os.path.join(run_dir, "cmd_train.sh"),
 write_sh(os.path.join(run_dir, "cmd_resume.sh"),
     f"{resume_cmd} \\\n    2>&1 | tee -a {log_file}")
 
-write_sh(os.path.join(run_dir, "cmd_pth2onnx.sh"), "\n".join([
-    f"python {os.path.join(HERE, 'pth2onnx.py')} \\",
-    f"    --embedding_type {args['embedding_type']} \\",
-    f"    --vecDims {args['vecDims']} \\",
-    f"    --output_type {args['output_type']} \\",
-    f"    --num_heads {args['num_heads']} \\",
-    f"    --num_layers {args['num_layers']} \\",
-    f"    --window_size {args['window_size']} \\",
-    f"    --model_file {save_model} \\",
+_pth2onnx_parts = [
+    f"python {os.path.join(HERE, 'pth2onnx.py')}",
+    f"    --embedding_type {args['embedding_type']}",
+    f"    --vecDims {args['vecDims']}",
+    f"    --output_type {args['output_type']}",
+    f"    --num_heads {args['num_heads']}",
+    f"    --num_layers {args['num_layers']}",
+    f"    --window_size {args['window_size']}",
+    f"    --tiktoken_encoding {args.get('tiktoken_encoding', 'cl100k_base')}",
+]
+if args.get('inner_dims'):
+    _pth2onnx_parts.append(f"    --inner_dims {args['inner_dims']}")
+_pth2onnx_parts += [
+    f"    --model_file {save_model}",
     f"    --output {onnx_model}",
-]))
+]
+write_sh(os.path.join(run_dir, "cmd_pth2onnx.sh"), " \\\n".join(_pth2onnx_parts))
 
 write_sh(os.path.join(run_dir, "cmd_netron.sh"),
     f"python -c \"import netron; netron.start('{onnx_model}', "

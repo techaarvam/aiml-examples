@@ -1,11 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="950" font-family="system-ui,sans-serif" font-size="12">
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1120" font-family="system-ui,sans-serif" font-size="12">
   <defs>
     <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
       <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
     </marker>
   </defs>
 
-  <rect width="760" height="950" fill="#f8fafc"/>
+  <rect width="760" height="1120" fill="#f8fafc"/>
 
   <!-- Title -->
   <text x="380" y="24" text-anchor="middle" font-size="14" font-weight="bold" fill="#0f172a">Run 4 — BTM Round 2 · OpenWebText · tiktoken gpt2 50k · ~32M params</text>
@@ -144,18 +144,44 @@
   <!-- Arrow down -->
   <line x1="380" y1="786" x2="380" y2="806" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <!-- d384 training in progress -->
+  <!-- d384 ep14 done -->
   <rect x="150" y="806" width="460" height="58" rx="5" fill="#e0f2fe" stroke="#7dd3fc" stroke-width="1.5"/>
-  <text x="380" y="826" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">d384 Training · btm_d384_cont · start_epoch 14 · in progress</text>
+  <text x="380" y="826" text-anchor="middle" font-size="12" font-weight="600" fill="#0c4a6e">d384 Training · btm_d384_cont · ep14 · 124,999 steps</text>
   <text x="380" y="842" text-anchor="middle" fill="#374151">machine3 input_list · batch 160 · lr 0.0003 · max_tokens 20M</text>
-  <text x="380" y="858" text-anchor="middle" font-size="10" fill="#64748b">~525M cumul. tokens at start · ~66% Chinchilla (N=40M)</text>
+  <text x="380" y="858" text-anchor="middle" font-size="10" fill="#64748b">~545M cumul. tokens · ~68% Chinchilla (N=40M)</text>
 
   <!-- Arrow down -->
   <line x1="380" y1="864" x2="380" y2="884" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
 
-  <!-- d384 output placeholder -->
+  <!-- d384 ep14 output -->
   <rect x="200" y="884" width="360" height="42" rx="6" fill="#0c4a6e"/>
-  <text x="380" y="904" text-anchor="middle" font-size="12" font-weight="600" fill="white">model_d384_cont.pth · 40M params · w256 · ep 14+</text>
-  <text x="380" y="920" text-anchor="middle" font-size="11" fill="#bae6fd">gpt2 50k vocab · in progress</text>
+  <text x="380" y="904" text-anchor="middle" font-size="12" font-weight="600" fill="white">d384 ep14 checkpoint · loss 5.7343 · 40M params</text>
+  <text x="380" y="920" text-anchor="middle" font-size="11" fill="#bae6fd">btm_d384_cont_20260521_142729/model.pth</text>
+
+  <!-- Fork arrows to two branches -->
+  <line x1="280" y1="926" x2="175" y2="960" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="480" y1="926" x2="585" y2="960" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Left branch: d384 cont ep15+ -->
+  <rect x="28" y="960" width="300" height="68" rx="5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <text x="178" y="980" text-anchor="middle" font-size="11" font-weight="600" fill="#64748b">d384 Cont. · ep15 · btm_d384_cont</text>
+  <text x="178" y="996" text-anchor="middle" font-size="10" fill="#94a3b8">from ep14 checkpoint · machine3 input_list</text>
+  <text x="178" y="1012" text-anchor="middle" font-size="10" fill="#94a3b8">cmd_run_d384.sh</text>
+  <text x="178" y="1024" text-anchor="middle" font-size="10" font-weight="600" fill="#94a3b8">killed — superseded by d512</text>
+
+  <!-- Right branch: extend_dims 384→512 then d512 -->
+  <rect x="432" y="960" width="300" height="44" rx="5" fill="#f3e8ff" stroke="#c084fc" stroke-width="1.5"/>
+  <text x="582" y="980" text-anchor="middle" font-size="11" font-weight="600" fill="#4a044e">extend_dims.py · 384→512 · 40M→51M params</text>
+  <text x="582" y="996" text-anchor="middle" font-size="10" fill="#374151">model_d512.pth · warm-start · 25.5M trainable</text>
+
+  <!-- Arrow down (right branch) -->
+  <line x1="582" y1="1004" x2="582" y2="1022" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- d512 training box -->
+  <rect x="432" y="1022" width="300" height="68" rx="5" fill="#fdf4ff" stroke="#e879f9" stroke-width="1.5"/>
+  <text x="582" y="1042" text-anchor="middle" font-size="11" font-weight="600" fill="#701a75">d512 Training · btm_d512_cont · ep15+</text>
+  <text x="582" y="1058" text-anchor="middle" font-size="10" fill="#374151">machine3 input_list · batch 160 · lr 0.0003</text>
+  <text x="582" y="1074" text-anchor="middle" font-size="10" fill="#374151">cmd_run_d512.sh · in progress</text>
+  <text x="582" y="1086" text-anchor="middle" font-size="10" fill="#64748b">~53%→ Chinchilla (N=51M)</text>
 
 </svg>

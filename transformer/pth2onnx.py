@@ -35,10 +35,12 @@ dIn = DataInput.DataInput()
 transformer = multihead.MultiHead().to(common.device)
 checkpoint = torch.load(args.model_file, map_location=common.device)
 if isinstance(checkpoint, dict) and 'model' in checkpoint:
-    transformer.load_state_dict(checkpoint['model'])
+    state_dict = {k.replace('_orig_mod.', ''): v for k, v in checkpoint['model'].items()}
+    transformer.load_state_dict(state_dict)
     dbg_output(f"Checkpoint epoch: {checkpoint.get('epoch', '?')}")
 else:
-    transformer.load_state_dict(checkpoint)
+    state_dict = {k.replace('_orig_mod.', ''): v for k, v in checkpoint.items()}
+    transformer.load_state_dict(state_dict)
 transformer = transformer.to(common.dtype)
 transformer.eval()
 
