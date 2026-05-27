@@ -64,9 +64,8 @@ class MultiHead (nn.Module):
         normedX = self.normalize(X, self.norm1[layer],
             (self.learnedMeanShift1[layer], self.learnedStdScale1[layer]) if args.use_custom_norm else None)
 
-        attentionOutput = normedX.unsqueeze(1).expand(-1, args.num_heads, -1, common.innerDims)
-        attentionOutput = self.attentionHeads[layer].forward(attentionOutput)
-        attentionOutput = attentionOutput.permute(0, 2, 1, 3).flatten(start_dim=2)
+        
+        attentionOutput = self.attentionHeads[layer].forward(normedX)
         attentionOutput = attentionOutput @ self.Wo[layer]
 
 

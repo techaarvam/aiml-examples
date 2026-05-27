@@ -14,6 +14,8 @@ import numpy as np
 from argParser import *
 import common
 import multihead
+from bitsandbytes.optim import Adam8bit
+
 
 from torch.profiler import profile, ProfilerActivity, schedule
 
@@ -112,6 +114,7 @@ if args.validate:
             loss = val_loss_fn(output.float().reshape(B * S, V), dTargetIndices.reshape(B * S))
             total_loss  += loss.item()
             num_batches += 1
+
             if num_batches % heartbeat == 0:
                 print(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
     mean_loss = total_loss / num_batches
@@ -127,8 +130,10 @@ if not args.model_file or args.resume:
         # Autograd and gradscale are not used in this code. (AMP is not used)
         # 1e-4 to help numerical stability in bfloat16
         optimizer = torch.optim.Adam(params=transformer.parameters(), lr=args.lr, eps=1e-4)
+    elif args.optimizer == "adam8":
+        optimizer = Adam8bit(transformer.parameters(), lr = args.lr)
     else:
-        optimizer = torch.optim.SGD(params=transformer.parameters(), lr=args.lr)
+        optimizer = torch.optim.SGD(params=transformer.parameters(), lr=args.lr, eps=1e-4)
 
     if args.resume and checkpoint and 'optimizer' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -150,7 +155,7 @@ if not args.model_file or args.resume:
             dbg_output(f"Pre-loaded input [{start_epoch % len(_input_files) + 1}/{len(_input_files)}]: {_correct_file}")
 
     if args.lr_schedule == 'plateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=5, factor=0.5, threshold=1e-3)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5, threshold=1e-3)
     elif args.lr_schedule == 'cosine':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
     else:
@@ -165,9 +170,13 @@ if not args.model_file or args.resume:
     _current_file = args.input if _cycling else None
 
 
+    def dump_profile(prof):
+        prof.export_chrome_trace("trace.json")
+
     with profile ( activities=[ ProfilerActivity.CPU, ProfilerActivity.CUDA],
-                   schedule = schedule(wait=2, warmup=1, active=3),
+                   schedule = schedule(wait=2, warmup=1, active=3, repeat=1),
                    record_shapes = True,
+                   on_trace_ready = dump_profile,
                    profile_memory = True,
                    with_stack = True ) as prof:
 
@@ -192,6 +201,10 @@ if not args.model_file or args.resume:
     
             loader_iter = tqdm(train_loader, desc=f"Epoch {i+1}/{args.epochs}", unit="batch") \
                           if interactive else train_loader
+
+            if (args.lr_warmup_target > 0):
+                increase_lr_by = args.lr_warmup_target - args.lr
+                increase_per_batch =  increase_lr_by / (total_batches / 10)
 
             for arg1, arg2, arg3 in loader_iter:
                 if args.embedding_type == "glove-fixed":
@@ -222,9 +235,19 @@ if not args.model_file or args.resume:
 
                 total_loss  += loss
                 num_batches += 1
+
+                if (args.lr_warmup_target > 0):
+                    for pg in optimizer.param_groups:
+                        if (num_batches < total_batches //10):
+                            pg['lr'] = args.lr + num_batches * increase_per_batch
+
     
                 if not interactive and num_batches % heartbeat_every == 0:
-                    dbg_output(f"  [{num_batches}/{total_batches}] loss={total_loss/num_batches:.4f}")
+                    avg = total_loss / num_batches
+                    dbg_output(f"  [{num_batches}/{total_batches}] loss={avg:.4f}")
+                    if scheduler and args.lr_schedule == 'plateau':
+                        scheduler.step(avg)
+                        dbg_output(f"  LR={optimizer.param_groups[0]['lr']:.6f}")
 
                 if progress_file:
                     elapsed   = time.time() - epoch_start
@@ -246,14 +269,13 @@ if not args.model_file or args.resume:
  
 
             dbg_output(f" Epoch{i+1}: Loss={total_loss/num_batches:.4f}")
-            if scheduler:
-                if args.lr_schedule == 'plateau':
-                    scheduler.step(total_loss/num_batches)
-                else:
-                    scheduler.step()
+            if scheduler and args.lr_schedule != 'plateau':
+                scheduler.step()
                 dbg_output(f" LR={optimizer.param_groups[0]['lr']:.6f}")
 
             # End of batch inner loop
+            torch.save({'model': transformer.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': i+1}, args.save_model)
+            dbg_output(f"Checkpoint saved to {args.save_model}")
 
         # End of Epoch Loop
 
@@ -261,8 +283,6 @@ if not args.model_file or args.resume:
     dbg_output(prof.key_averages(group_by_input_shape=True).table(sort_by="cuda_time_total", row_limit = 20))
     dbg_output(prof.key_averages(group_by_input_shape=True).table(sort_by="cpu_time_total", row_limit = 20))
     prof.export_chrome_trace("trace.json")
-    torch.save({'model': transformer.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': i+1}, args.save_model)
-    dbg_output(f"Checkpoint saved to {args.save_model}")
 
 
 def sample_token(logits):

@@ -8,4 +8,4 @@ systemd-inhibit --what=idle:sleep --why="d512 local training" \
 python runner.py runs.toml btm_d512_cont_local \
     --resume \
     --start_epoch 16 \
-    --model_file btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model.pth
+    --model_file btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model_fused.pth

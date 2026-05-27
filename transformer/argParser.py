@@ -9,7 +9,8 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=32, help='Training batch size')
     parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'], help='Optimizer type')
+    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'adam8', 'sgd'], help='Optimizer type')
+    parser.add_argument('--qkv', type=str, default='fused', choices=['fused', 'unfused'], help='qkv fused/unfused. Also enabled flash attention')
     parser.add_argument('--data_dir', type=str, default='./data', help='Directory containing training data')
     parser.add_argument('--save_model', type=str, default='transformer_model.pth', help='Path to save trained model')
     parser.add_argument('--use_custom_norm', action='store_true', default=False, help='Use custom mean/std norm instead of nn.LayerNorm')
@@ -49,6 +50,8 @@ def parse_args():
         help='Min-p threshold: fraction of top-token prob below which tokens are dropped (default 0.05)')
     parser.add_argument('--inner_dims', type=int, default=None,
         help='Expanded inner transformer dimension (d’). When set, frozen embedding/output adapters bridge vecDims→inner_dims. Use extend_dims.py to create the starting checkpoint.')
+    parser.add_argument('--lr_warmup_target', type=float, default=0.0,
+        help='ending LR after warmup. 10% of the epoch is the duration for the warmup hard coded currently')
     return parser.parse_args()
 
 args = parse_args()

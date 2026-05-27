@@ -85,6 +85,13 @@ Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a sh
 | d384 ep14 | 256 | 40M | 800M | ~545M | ~68% |
 | extend_dims 384→512 | — | 40M→51M | 800M→1,020M | ~545M | ~53% ↓ |
 | d512 ep15 | 256 | 51M | 1,020M | ~565M | ~55% |
+| d512 ep16 (local) | 256 | 51M | 1,020M | ~585M | ~57% |
+| d512 ep17 (local) | 256 | 51M | 1,020M | ~605M | ~59% |
+| d512 ep18 (local) | 256 | 51M | 1,020M | ~625M | ~61% |
+| d512 ep19 (local, in progress) | 256 | 51M | 1,020M | ~645M | ~63% |
+| extend_dims 512→640 (planned) | — | 51M→65M | 1,020M→1,310M | ~645M | ~49% ↓ |
+| d640 ep20+ (planned) | 256 | 65M | 1,310M | TBD | TBD |
+| extend_dims 640→768 (planned) | — | 65M→83M | 1,310M→1,660M | TBD | TBD ↓ |
 
 Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
 
@@ -104,6 +111,11 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 11. **extend_dims.py** — inner transformer dimension 384→512, N: 40M→51M → `model_d512.pth` (from d384 ep14 checkpoint)
 12. **d512 ep15** — btm_d512_cont profile, machine3 input_list, from model_d512.pth — in progress
 13. **d384 ep15 cont** — btm_d384_cont profile, continuing from d384 ep14 checkpoint — killed, superseded by d512
+14. **d512 ep16–19 (local)** — btm_d512_cont_local, machine3 gs11–gs14 slice 3, batch=256 — ep19 in progress
+15. **extend_dims 512→640** — planned after ep19; head_dim=160; 65.5M params; B=160 on 12GB
+16. **d640 continuation** — planned; a few epochs before next expansion
+17. **extend_dims 640→768** — planned; head_dim=192; 82.9M params; B=128 on 12GB
+18. **context interpolation** — planned after d768 epochs; w256→512 or 1024
 
 ### Loss Log
 | | Machine 1 | Machine 2 | Machine 3 | Machine 4 |
@@ -307,6 +319,118 @@ d384 architecture (inner_dims=384, 40M params) trained from random init on same 
 | **100%** | **15,620** | **5.7338** |
 
 ---
+
+### d512 Local Continuation — ep16 (May 23, 2026)
+
+| Parameter | Value |
+|-----------|-------|
+| Starting checkpoint | btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model.pth (ep15, loss 5.7338) |
+| Profile | btm_d512_cont_local |
+| inner_dims | 512 |
+| batch_size | 256 |
+| Steps/epoch | 78,124 |
+| Rate | ~1.43 steps/sec, ~15 hr/epoch |
+| Data | gs11_m3_s1.txt, slice 3, offset 60M (fresh — not seen by server) |
+| input_list | machine3 5-shard cycling (gs11–gs15) |
+
+**Loss Log — ep16**
+
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,812 | 5.5375 |
+| 20% | 15,624 | 5.5183 |
+| 30% | 23,436 | 5.5055 |
+| 40% | 31,248 | 5.4961 |
+| 50% | 39,060 | 5.4885 |
+| 60% | 46,872 | 5.4822 |
+| 70% | 54,684 | 5.4768 |
+| 80% | 62,496 | 5.4721 |
+| 90% | 70,308 | 5.4679 |
+| **100%** | **78,120** | **5.4640** |
+
+**Loss Log — ep17** (data: gs12_m3_s2.txt, slice 3 offset 60M)
+
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,812 | 5.5100 |
+| 20% | 15,624 | 5.4968 |
+| 30% | 23,436 | 5.4885 |
+| 40% | 31,248 | 5.4823 |
+| 50% | 39,060 | 5.4771 |
+| 60% | 46,872 | 5.4727 |
+| 70% | 54,684 | 5.4689 |
+| 80% | 62,496 | 5.4655 |
+| 90% | 70,308 | 5.4624 |
+| **100%** | **78,120** | **5.4596** |
+
+**Loss Log — ep18** (data: gs13_m3_s3.txt, slice 3 offset 60M)
+
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,812 | 5.4939 |
+| 20% | 15,624 | 5.4827 |
+| 30% | 23,436 | 5.4749 |
+| 40% | 31,248 | 5.4693 |
+| 50% | 39,060 | 5.4649 |
+| 60% | 46,872 | 5.4610 |
+| 70% | 54,684 | 5.4577 |
+| 80% | 62,496 | 5.4547 |
+| 90% | 70,308 | 5.4520 |
+| **100%** | **78,120** | **5.4495** |
+
+**Loss Log — ep19** (data: gs14_m3_s4.txt, slice 3 offset 60M, in progress)
+
+| Checkpoint | Batch | Loss |
+|------------|-------|------|
+| 10% | 7,812 | 5.4850 |
+| 20% | 15,624 | 5.4747 |
+| 30% | 23,436 | 5.4683 |
+| 40% | 31,248 | 5.4636 |
+| 50% | 39,060 | 5.4596 |
+| 60% | 46,872 | 5.4562 |
+| 70% | 54,684 | 5.4535 |
+| 80% | 62,496 | 5.4510 |
+| 90% | 70,308 | 5.4487 |
+| **100%** | **78,120** | **5.4465** |
+
+ep19 final: 5.4465. Run continued to ep20 without saving ep19 model.pth (save was outside epoch loop — bug). ep19 weights not recoverable.
+
+---
+
+### Code Changes — May 26, 2026
+
+| Change | Detail |
+|---|---|
+| QKV | Fused: single `[innerDims, 3*innerDims]` param replaces 3×`[num_heads, innerDims, head_dim]` |
+| Attention | F.scaled_dot_product_attention, is_causal=True (PyTorch 2.10 built-in) |
+| Optimizer | Adam, eps=1e-4 |
+| Checkpoint conversion | convert_unfused_to_fused.py: permute+reshape keys/query/value → qkv; optimizer state dropped |
+| VRAM (batch=256, d512, bfloat16) | ~9.6GB → 5.7GB after fused+flash_attn |
+
+Tried `permute(2,0,1,3,4).contiguous()` before flash_attn_func to fix seqlen stride (`3·H·head_dim` → `H·head_dim` on `qkv[:,:,0]` slice); loss ~6-7 at 10%, climbed to 14+ by ~80% — not the root cause. flash_attn_func v2.8.3 backward on RTX 5070 (sm_120) identified as potential cause; replaced with F.scaled_dot_product_attention (May 27); ep16 rerun stable, 5.62 at 9.5%.
+
+---
+
+### d512 ep16 Rerun — SDPA (May 27, 2026)
+
+Starting checkpoint: `btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model_fused.pth` (ep15, loss 5.7338, fused QKV, cold optimizer)
+
+| Parameter | Value |
+|---|---|
+| Attention | F.scaled_dot_product_attention |
+| batch_size | 512 |
+| lr | 0.0009 |
+| lr_schedule | plateau |
+| optimizer | Adam, eps=1e-4 |
+
+| Checkpoint | Loss |
+|---|---|
+| ~10% | 5.62 |
+| ~20% | 5.45 |
+
+vs. ep16 unfused (batch=256, lr=0.0003): 5.5375 at 10%, 5.5183 at 20%.
+
+batch=512, lr=0.0009 descending faster than previous ep16. A FastAI-style LR range test before long runs to find the largest stable LR is a worthwhile upfront investment.
 
 ### VRAM profile (batch=256, w128, bfloat16, no grad_checkpoint)
 Observed 19 GB peak on training run. Main contributors:

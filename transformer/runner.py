@@ -186,9 +186,11 @@ print(f"Profile  : {profile_name}")
 print(f"Run dir  : {run_dir}")
 print(f"Log      : {log_file}")
 print(f"Model    : {save_model}")
+_inner = args.get('inner_dims')
+_inner_str = f" inner={_inner}" if _inner else ""
 print(f"Config   : layers={args['num_layers']} heads={args['num_heads']} "
-      f"dims={args['vecDims']} window={args['window_size']} "
-      f"batch={args['batch_size']} epochs={args['epochs']}")
+      f"dims={args['vecDims']}{_inner_str} window={args['window_size']} "
+      f"batch={args['batch_size']} lr={args['lr']} epochs={args['epochs']}")
 print(f"Data     : {args.get('input', 'N/A')}")
 print(f"Vocab    : {args.get('max_vocab_size', 'unlimited')}")
 print("=" * 60)
