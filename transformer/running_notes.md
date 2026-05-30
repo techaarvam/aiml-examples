@@ -88,12 +88,37 @@ Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a sh
 | d512 ep16 (local) | 256 | 51M | 1,020M | ~585M | ~57% |
 | d512 ep17 (local) | 256 | 51M | 1,020M | ~605M | ~59% |
 | d512 ep18 (local) | 256 | 51M | 1,020M | ~625M | ~61% |
-| d512 ep19 (local, in progress) | 256 | 51M | 1,020M | ~645M | ~63% |
+| d512 ep19 (local) | 256 | 51M | 1,020M | ~645M | ~63% |
 | extend_dims 512→640 (planned) | — | 51M→65M | 1,020M→1,310M | ~645M | ~49% ↓ |
 | d640 ep20+ (planned) | 256 | 65M | 1,310M | TBD | TBD |
 | extend_dims 640→768 (planned) | — | 65M→83M | 1,310M→1,660M | TBD | TBD ↓ |
 
 Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
+
+### Checkpoints — Run 4
+
+All local paths relative to `transformer/`. `opt` = includes Adam optimizer state. Server = M4 (207.102.87.207), code root `/root/transformer/`.
+
+| Phase | Epoch | Loss | Local path | Size | opt | Notes |
+|---|---|---|---|---|---|---|
+| w64 final M1 | 7 | 6.0920 | `btm_r2_backups/model_step1_128_m1.pth` | 184M | ✓ | saturated |
+| w64 final M2 | 7 | 6.0871 | `btm_r2_backups/model_step1_128_m2.pth` | 184M | ✓ | saturated |
+| w64 final M3 | 6 | 6.1099 | `btm_r2_backups/model_step1_128_m3.pth` | 184M | ✓ | 180W cap, stopped ep6 |
+| w64 final M4 | 7 | 6.0885 | `btm_r2_backups/model_step1_128_m4.pth` | 184M | ✓ | saturated |
+| w64 ext M3 | 7 | — | `btm_r2_backups/model_step1_128_ext_m3.pth` | 62M | ✗ | posEmbed 64→128 interpolated; only M3 copy local |
+| w128 branch M1 | 1 | 5.9181 | `btm_r2_backups/model_w128_m1.pth` | 185M | ✓ | |
+| w128 branch M2 | 1 | 5.8776 | `btm_r2_backups/model_w128_m2.pth` | 185M | ✓ | |
+| w128 branch M3 | 1 | 5.9133 | `btm_r2_backups/model_w128_m3.pth` | 185M | ✓ | |
+| w128 branch M4 | 1 | 5.9196 | `btm_r2_backups/model_w128_m4.pth` | 185M | ✓ | |
+| BTM merge | — | — | `btm_r2_backups/btm_w128_merged.pth` | 124M | ✗ | avg of 4 w128 branches |
+| w128 cont | 12 | 5.7632 | `btm_r2_backups/btm_w128_cont.pth` | 185M | ✓ | post-merge ep11–12 on M4 |
+| w256 cont | 13 | 5.6670 | `btm_r2_backups/btm_w256_cont_ep13.pth` | 185M | ✓ | server: `runs/btm_w256_cont_20260521_054026/model.pth` |
+| d384 ep14 | 14 | 5.7343 | — | — | — | server only: `runs/btm_d384_cont_20260521_142729/model.pth` |
+| d512 ep15 (unfused) | 15 | 5.7338 | `btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model.pth` | 196M | ✓ | |
+| d512 ep15 (fused) | 15 | 5.7338 | `btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model_fused.pth` | 99M | ✗ | fused QKV, cold optimizer; SDPA ep16 starting point |
+| d512 ep16 (SDPA) | 16 | 5.1473 | `runs/btm_d512_cont_local_20260527_070826/model.pth` | 196M | ✓ | |
+| d512 ep18 (SDPA) | 18 | 4.9953 | `runs/btm_d512_cont_local_20260527_203054/model.pth` | 196M | ✓ | |
+| d512 ep19 (SDPA) | 19 | 5.0129 | `runs/btm_d512_cont_local_20260528_223411/model.pth` | 196M | ✓ | Wo surgery applied → model_wo_repaired.pth |
 
 ### Actual training approach (decided mid-run)
 All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend context, merge.
@@ -111,7 +136,7 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 11. **extend_dims.py** — inner transformer dimension 384→512, N: 40M→51M → `model_d512.pth` (from d384 ep14 checkpoint)
 12. **d512 ep15** — btm_d512_cont profile, machine3 input_list, from model_d512.pth — in progress
 13. **d384 ep15 cont** — btm_d384_cont profile, continuing from d384 ep14 checkpoint — killed, superseded by d512
-14. **d512 ep16–19 (local)** — btm_d512_cont_local, machine3 gs11–gs14 slice 3, batch=256 — ep19 in progress
+14. **d512 ep16–19 (local)** — btm_d512_cont_local, machine3 gs11–gs14 slice 3, batch=256 — ep19 final 5.0129; Wo surgery applied to ep19 checkpoint
 15. **extend_dims 512→640** — planned after ep19; head_dim=160; 65.5M params; B=160 on 12GB
 16. **d640 continuation** — planned; a few epochs before next expansion
 17. **extend_dims 640→768** — planned; head_dim=192; 82.9M params; B=128 on 12GB
@@ -423,14 +448,182 @@ Starting checkpoint: `btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334
 | lr_schedule | plateau |
 | optimizer | Adam, eps=1e-4 |
 
-| Checkpoint | Loss |
-|---|---|
-| ~10% | 5.62 |
-| ~20% | 5.45 |
+| Checkpoint | Batch | Loss |
+|---|---|---|
+| 10% | 3,906 | 5.6178 |
+| 20% | 7,812 | 5.4536 |
+| 30% | 11,718 | 5.3651 |
+| 40% | 15,624 | 5.3070 |
+| 50% | 19,530 | 5.2644 |
+| 60% | 23,436 | 5.2313 |
+| 70% | 27,342 | 5.2046 |
+| 80% | 31,248 | 5.1825 |
+| 90% | 35,154 | 5.1636 |
+| **100%** | **39,060** | **5.1473** |
 
-vs. ep16 unfused (batch=256, lr=0.0003): 5.5375 at 10%, 5.5183 at 20%.
+vs. ep16 unfused (batch=256, lr=0.0006): 5.5375 at 10%, 5.4640 final.
 
 batch=512, lr=0.0009 descending faster than previous ep16. A FastAI-style LR range test before long runs to find the largest stable LR is a worthwhile upfront investment.
+
+---
+
+### d512 ep17 — reset_optimizer_every_epoch=True (May 27, 2026) — killed at 2.5%
+
+Starting checkpoint: `runs/btm_d512_cont_local_20260527_070826/model.pth` (ep16, loss 5.1473)
+
+| Parameter | Value |
+|---|---|
+| Attention | F.scaled_dot_product_attention |
+| batch_size | 512 |
+| lr | 0.0009 |
+| lr_schedule | plateau |
+| optimizer | Adam, eps=1e-4, cold every epoch |
+| reset_optimizer_every_epoch | true |
+| input_list | all 20 shards (gs1–gs20, 4 machines) |
+| data | gs17_m4_s2.txt, slice 3 offset 60M |
+
+| Checkpoint | Batch | Loss |
+|---|---|---|
+| start | 0 | 8–9 |
+| ep17 | ~2.5% | 5.49 |
+
+Killed — above ep16 final (5.1473) at 2.5%; cold v_t too disruptive on fresh data.
+
+---
+
+### d512 ep17 — reset_optimizer_every_epoch=False (May 27, 2026)
+
+Starting checkpoint: `runs/btm_d512_cont_local_20260527_070826/model.pth` (ep16, loss 5.1473)  
+Run dir: `btm_d512_cont_local_20260527_203054`
+
+| Parameter | Value |
+|---|---|
+| Attention | F.scaled_dot_product_attention |
+| batch_size | 512 |
+| lr | 0.0009 |
+| lr_schedule | plateau |
+| optimizer | Adam, eps=1e-4, warm (ep16 state loaded) |
+| reset_optimizer_every_epoch | false |
+| input_list | all 20 shards (gs1–gs20, 4 machines) |
+| data | gs17_m4_s2.txt, slice 3 offset 60M |
+
+| Checkpoint | Batch | Loss |
+|---|---|---|
+| start | 0 | 5.36 |
+| 10% | 3,906 | 5.1698 |
+| 20% | 7,812 | 5.1327 |
+| 30% | 11,718 | 5.1084 |
+| 40% | 15,624 | 5.0909 |
+| 50% | 19,530 | 5.0768 |
+| 60% | 23,436 | 5.0650 |
+| 70% | 27,342 | 5.0550 |
+| 80% | 31,248 | 5.0463 |
+| 90% | 35,154 | 5.0385 |
+| **100%** | **39,062** | **5.0315** |
+
+---
+
+### d512 ep18 (May 28, 2026)
+
+Data: gs18_m4_s3.txt, slice 3 offset 60M. Plateau scheduler fired twice during epoch.
+
+| Checkpoint | Batch | Loss | LR |
+|---|---|---|---|
+| 10% | 3,906 | 5.1333 | 0.000900 |
+| 20% | 7,812 | 5.0999 | 0.000900 |
+| 30% | 11,718 | 5.0788 | 0.000450 ← halved |
+| 40% | 15,624 | 5.0547 | 0.000450 |
+| 50% | 19,530 | 5.0385 | 0.000450 |
+| 60% | 23,436 | 5.0269 | 0.000225 ← halved |
+| 70% | 27,342 | 5.0159 | 0.000225 |
+| 80% | 31,248 | 5.0074 | 0.000225 |
+| 90% | 35,154 | 5.0008 | 0.000225 |
+| **100%** | **39,060** | **4.9953** | 0.000225 |
+
+Plateau scheduler fired at 30% (0.0009→0.00045) and 60% (0.00045→0.000225). Cause: cumulative avg at ep18 start exceeded ep17 final (5.0315) for 2 consecutive heartbeats. Model still improving — scheduler misfired due to cumulative average metric inconsistency across epoch boundaries.
+
+---
+
+### d512 ep19 (May 28–29, 2026)
+
+Data: gs19_m4_s4.txt, slice 3 offset 60M. LR=0.000225 throughout (plateau scheduler carried from ep18, did not fire).
+
+| Checkpoint | Batch | Loss | LR |
+|---|---|---|---|
+| 10% | 3,906 | 5.1215 | 0.000225 |
+| 20% | 7,812 | 5.0921 | 0.000225 |
+| 30% | 11,718 | 5.0734 | 0.000225 |
+| 40% | 15,624 | 5.0594 | 0.000225 |
+| 50% | 19,530 | 5.0483 | 0.000225 |
+| 60% | 23,436 | 5.0392 | 0.000225 |
+| 70% | 27,342 | 5.0313 | 0.000225 |
+| 80% | 31,248 | 5.0244 | 0.000225 |
+| 90% | 35,154 | 5.0183 | 0.000225 |
+| **100%** | **39,062** | **5.0129** | 0.000225 |
+
+Checkpoint: `runs/btm_d512_cont_local_20260528_223411/model.pth`
+
+---
+
+### Wo SVD Analysis — ep19 checkpoint (May 29, 2026)
+
+SVD computed on all 8 Wo layers [512×512] from ep19 checkpoint.
+
+**Inactive singular directions per layer (before repair)**
+
+| Layer | Total dims | Active (>1e-6) | Inactive (≤1e-6) | Active s_mean | Active s_max |
+|---|---|---|---|---|---|
+| Wo.0 | 512 | 258 | 254 | 0.8024 | 2.7710 |
+| Wo.1 | 512 | 258 | 254 | 0.8741 | 3.2901 |
+| Wo.2 | 512 | 258 | 254 | 0.8974 | 3.1036 |
+| Wo.3 | 512 | 258 | 254 | 0.8969 | 3.0821 |
+| Wo.4 | 512 | 258 | 254 | 0.9000 | 3.0927 |
+| Wo.5 | 512 | 258 | 254 | 0.9206 | 3.2047 |
+| Wo.6 | 512 | 258 | 254 | 0.9742 | 2.7458 |
+| Wo.7 | 512 | 258 | 254 | 1.0353 | 2.4144 |
+
+254/512 singular directions inactive in all layers. Root cause: `extend_dims.py` zero-padded Wo from [256×256] to [512×512]; the new 256 rows/columns were initialised to zero → rank-deficient from day 0. Only 2 directions recovered gradient signal over 4 epochs of training.
+
+**Condition numbers before and after repair**
+
+Repair: inactive singular values (≤1e-6) boosted to 5% of active mean per layer. Applied to `model.pth` → `model_wo_repaired.pth`. Original backed up as `model.pth.bak`.
+
+| Layer | cond before | boost value | s_min after | s_max after | cond after |
+|---|---|---|---|---|---|
+| Wo.0 | inf | 0.04012 | 0.03884 | 2.7710 | 71 |
+| Wo.1 | inf | 0.04370 | 0.04353 | 3.2901 | 76 |
+| Wo.2 | inf | 0.04487 | 0.04458 | 3.1037 | 70 |
+| Wo.3 | inf | 0.04485 | 0.04459 | 3.0822 | 69 |
+| Wo.4 | inf | 0.04500 | 0.04476 | 3.0927 | 69 |
+| Wo.5 | inf | 0.04603 | 0.04575 | 3.2047 | 70 |
+| Wo.6 | inf | 0.04871 | 0.04839 | 2.7458 | 57 |
+| Wo.7 | inf | 0.05177 | 0.05133 | 2.4144 | 47 |
+
+---
+
+### d512 ep20 (May 29, 2026) — in progress
+
+Run dir: `runs/btm_d512_cont_local_20260529_181714/` (power-cut restart; earlier attempt: `20260529_125737`)
+Started from: `model_wo_repaired.pth` (ep19, Wo surgery applied)
+Data: gs15_m3_s5.txt, slice 4, offset 80,000,000
+
+| Parameter | Value |
+|---|---|
+| lr | 0.0003 (manual reset, up from 0.000225) |
+| lr_schedule | plateau |
+| batch_size | 512 |
+| start_epoch | 20 |
+| steps/epoch | 39,062 |
+
+| Checkpoint | Batch | Loss | LR | Wo inactive | cond>1e5 |
+|---|---|---|---|---|---|
+| 0.2% | 81 | 5.2252 | 0.000300 | — | — |
+| 7.7% | ~3,008 | 5.1096 | 0.000300 | — | — |
+| 10% | 3,906 | 5.0933 | 0.000300 | none | none |
+| 20% | 7,812 | 5.0460 | 0.000300 | none | Wo.1:1.2e5, Wo.4:1.1e5 |
+| 30% | 11,718 | 5.0170 | 0.000300 | none | none |
+
+Notes: 0.2% and 7.7% from first attempt (125737); 10–30% from restart (181714). Surgery bump absorbed by 7.7%. Wo.1/Wo.4 condition spike at 20% dropped back below 1e5 at 30% — transient, no dead directions at any point.
 
 ### VRAM profile (batch=256, w128, bfloat16, no grad_checkpoint)
 Observed 19 GB peak on training run. Main contributors:
@@ -1194,6 +1387,30 @@ Four validation datasets, all held out from training:
 LAMBADA is a standard LM benchmark entirely independent of both training sources. Each passage requires broader context to predict the final word correctly, making it a useful probe of how well the model generalises beyond its training distribution.
 
 All four files live in `raw_data/`. Trainer.py validation mode (to be added) will run a forward pass over the given file and report cross-entropy loss — no training, no gradient updates.
+
+### Adam Optimizer — Observed Behaviour (May 27, 2026)
+
+| Observation | Data |
+|---|---|
+| ep16–ep19 unfused, warm optimizer from ep15 (batch=1280), lr=0.0006, batch=256 | loss 5.7338 → 5.4465 over 4 epochs, ~312K batches |
+| ep16 rerun, cold optimizer, lr=0.0009, batch=512 | loss 5.7338 → 5.17 at 87% of one epoch, ~34K batches |
+| v_t accumulated from ep15 server run (batch=1280) carried into local runs with different batch size | — |
+| Cold restart + higher LR broke through without warm v_t state | — |
+| ep17 reset_optimizer_every_epoch=True (batch=512, lr=0.0009, fresh data gs17 machine4): loss started 8–9, 2.5% = 5.49 — killed; still above ep16 final (5.1473) at 2.5%; reset on every epoch with new data too disruptive | — |
+| ep17 reset_optimizer_every_epoch=False (same config, same data): loss started 5.36 — warm v_t held model near ep16 final despite fresh data; +0.21 bump = data distribution shift only | — |
+
+References to read:
+
+| Topic | Paper | Authors | Year |
+|---|---|---|---|
+| Adam non-convergence in certain settings; AMSGrad | On the Convergence of Adam and Beyond | Reddi et al. | 2018 |
+| Adam generalizes worse than SGD on some tasks | Improving Generalization Performance by Switching from Adam to SGD | Keskar & Socher | 2017 |
+| Weight decay flaw in Adam; AdamW fix | Decoupled Weight Decay Regularization | Loshchilov & Hutter | 2019 |
+| Sign-based optimizer; half Adam memory, no v_t | Symbolic Discovery of Optimization Algorithms (Lion) | Chen et al. | 2023 |
+| Second-order optimizer; ~2× fewer steps than Adam on LM pretraining | Sophia: A Scalable Stochastic Second-order Optimizer | Liu et al. | 2023 |
+| Nesterov + gradient orthogonalization; faster than AdamW on LM | Muon optimizer | Kosson et al. | 2024 |
+
+---
 
 ### Key References
 | Topic | Paper | Authors | Year |

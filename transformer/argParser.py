@@ -52,6 +52,10 @@ def parse_args():
         help='Expanded inner transformer dimension (d’). When set, frozen embedding/output adapters bridge vecDims→inner_dims. Use extend_dims.py to create the starting checkpoint.')
     parser.add_argument('--lr_warmup_target', type=float, default=0.0,
         help='ending LR after warmup. 10% of the epoch is the duration for the warmup hard coded currently')
+    parser.add_argument('--reset_optimizer_every_epoch', action='store_true', default=False,
+        help='Discard optimizer state at the start of each epoch after the first. Cold Adam restart each epoch.')
+    parser.add_argument('--reset_adam_v_every_epoch', action='store_true', default=False,
+        help='Zero exp_avg_sq (v_t) at the start of each epoch after the first, keeping exp_avg (m_t). Clears stale scale estimates while preserving directional momentum.')
     return parser.parse_args()
 
 args = parse_args()

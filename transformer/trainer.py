@@ -135,7 +135,7 @@ if not args.model_file or args.resume:
     else:
         optimizer = torch.optim.SGD(params=transformer.parameters(), lr=args.lr, eps=1e-4)
 
-    if args.resume and checkpoint and 'optimizer' in checkpoint:
+    if args.resume and checkpoint and 'optimizer' in checkpoint and not args.reset_optimizer_every_epoch:
         optimizer.load_state_dict(checkpoint['optimizer'])
         for pg in optimizer.param_groups:   # add these two lines
             pg['lr'] = args.lr
@@ -170,6 +170,14 @@ if not args.model_file or args.resume:
     _current_file = args.input if _cycling else None
 
 
+    def reset_adam_v(opt):
+        """Zero exp_avg_sq (v_t) for all params while keeping exp_avg (m_t)."""
+        for group in opt.param_groups:
+            for p in group['params']:
+                state = opt.state[p]
+                if 'exp_avg_sq' in state:
+                    state['exp_avg_sq'].zero_()
+
     def dump_profile(prof):
         prof.export_chrome_trace("trace.json")
 
@@ -195,6 +203,24 @@ if not args.model_file or args.resume:
                     total_batches   = len(train_loader)
                     heartbeat_every = max(1, total_batches // 10)
             dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
+            if args.reset_adam_v_every_epoch:
+                reset_adam_v(optimizer)
+                dbg_output(f"  Adam v_t reset: exp_avg_sq zeroed, exp_avg kept, lr={args.lr}")
+
+            if args.reset_optimizer_every_epoch and i > start_epoch:
+                if args.optimizer == "adam":
+                    optimizer = torch.optim.Adam(params=transformer.parameters(), lr=args.lr, eps=1e-4)
+                elif args.optimizer == "adam8":
+                    optimizer = Adam8bit(transformer.parameters(), lr=args.lr)
+                else:
+                    optimizer = torch.optim.SGD(params=transformer.parameters(), lr=args.lr, eps=1e-4)
+                if args.lr_schedule == 'plateau':
+                    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=2, factor=0.5, threshold=1e-3)
+                elif args.lr_schedule == 'cosine':
+                    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-5)
+                else:
+                    scheduler = None
+                dbg_output(f"  Optimizer reset: fresh state, lr={args.lr}")
             total_loss  = 0.0
             num_batches = 0
             epoch_start = time.time()
@@ -245,6 +271,7 @@ if not args.model_file or args.resume:
                 if not interactive and num_batches % heartbeat_every == 0:
                     avg = total_loss / num_batches
                     dbg_output(f"  [{num_batches}/{total_batches}] loss={avg:.4f}")
+                    getattr(transformer, '_orig_mod', transformer).dbg_output_health_check()
                     if scheduler and args.lr_schedule == 'plateau':
                         scheduler.step(avg)
                         dbg_output(f"  LR={optimizer.param_groups[0]['lr']:.6f}")

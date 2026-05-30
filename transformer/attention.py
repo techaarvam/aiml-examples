@@ -113,6 +113,25 @@ class Attention(nn.Module):
  
         ret_candidate = nn.functional.softmax( scores , dim=-1)  @ V
         return ret_candidate.permute(0,2,1,3).flatten(start_dim=2)
-    
+
+    def dbg_output_health_check(self):
+        """Return list of (name, cond, n_inactive, total) for each attention matrix."""
+        DEAD = 1e-6
+        out  = []
+        if args.qkv == 'unfused':
+            for name, param in [('Q', self.query), ('K', self.keys), ('V', self.value)]:
+                W    = param.detach().cpu().float()
+                H, D, hd = W.shape
+                S    = torch.linalg.svdvals(W.permute(1, 0, 2).reshape(D, H * hd))
+                n    = (S <= DEAD).sum().item()
+                cond = (S[0] / S[-1]).item() if S[-1] > 0 else float('inf')
+                out.append((name, cond, n, len(S)))
+        else:
+            W    = self.qkv.detach().cpu().float()
+            S    = torch.linalg.svdvals(W)
+            n    = (S <= DEAD).sum().item()
+            cond = (S[0] / S[-1]).item() if S[-1] > 0 else float('inf')
+            out.append(('qkv', cond, n, len(S)))
+        return out
 
 

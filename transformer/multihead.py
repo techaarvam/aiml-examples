@@ -75,6 +75,48 @@ class MultiHead (nn.Module):
         X = X + self.mlp[layer](normedX)
         return X
 
+    def dbg_output_health_check(self):
+        """Print Wo inactive singular directions and all matrices with cond > 1e5."""
+        THRESH = 1e5
+        DEAD   = 1e-6
+        wo_inactive = []
+        ill_cond    = []
+
+        for L in range(args.num_layers):
+            # Attention (delegates to Attention.dbg_output_health_check)
+            for name, cond, n_inactive, total in self.attentionHeads[L].dbg_output_health_check():
+                if cond > THRESH:
+                    ill_cond.append(f'attn{L}.{name}:{cond:.1e}')
+
+            # Wo
+            S    = torch.linalg.svdvals(self.Wo[L].detach().cpu().float())
+            n    = (S <= DEAD).sum().item()
+            cond = (S[0] / S[-1]).item() if S[-1] > 0 else float('inf')
+            if n > 0:
+                wo_inactive.append(f'L{L}:{n}/{len(S)}')
+            if cond > THRESH:
+                ill_cond.append(f'Wo.{L}:{cond:.1e}')
+
+            # FFN
+            for idx, tag in [(0, f'FFN_up.{L}'), (2, f'FFN_dn.{L}')]:
+                W    = self.mlp[L][idx].weight.detach().cpu().float()
+                S    = torch.linalg.svdvals(W)
+                cond = (S[0] / S[-1]).item() if S[-1] > 0 else float('inf')
+                if cond > THRESH:
+                    ill_cond.append(f'{tag}:{cond:.1e}')
+
+        # upscale / downscale
+        for attr, tag in [('upscale', 'upscale'), ('downscale', 'downscale')]:
+            if hasattr(self, attr):
+                W    = getattr(self, attr).weight.detach().cpu().float()
+                S    = torch.linalg.svdvals(W)
+                cond = (S[0] / S[-1]).item() if S[-1] > 0 else float('inf')
+                if cond > THRESH:
+                    ill_cond.append(f'{tag}:{cond:.1e}')
+
+        dbg_output("  Wo inactive: " + (" ".join(wo_inactive) if wo_inactive else "none"))
+        dbg_output("  cond>1e5:    " + (", ".join(ill_cond)   if ill_cond    else "none"))
+
     def normalize (self, X, norm, learnedParams=None):
         # Instead of using nn.LayerNorm, using mean/std operations,
         # since this is a learning project and the goal is to break
