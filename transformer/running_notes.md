@@ -107,8 +107,11 @@ Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a sh
 | d512 ep17 (local) | 256 | 51M | 1,020M | ~605M | ~59% |
 | d512 ep18 (local) | 256 | 51M | 1,020M | ~625M | ~61% |
 | d512 ep19 (local) | 256 | 51M | 1,020M | ~645M | ~63% |
-| extend_dims 512→640 (planned) | — | 51M→65M | 1,020M→1,310M | ~645M | ~49% ↓ |
-| d640 ep20+ (planned) | 256 | 65M | 1,310M | TBD | TBD |
+| d512 ep20 (local) | 256 | 51M | 1,020M | ~665M | ~65% |
+| d512 ep21 (local) | 256 | 51M | 1,020M | ~685M | ~67% |
+| d512 ep22 (local) | 256 | 51M | 1,020M | ~705M | ~69% |
+| extend_dims 512→640 (planned, after ep22) | — | 51M→65M | 1,020M→1,310M | ~705M | ~54% ↓ |
+| d640 (planned) | 256 | 65M | 1,310M | TBD | TBD |
 | extend_dims 640→768 (planned) | — | 65M→83M | 1,310M→1,660M | TBD | TBD ↓ |
 | d768 (planned, final) | 256 | 83M | 1,660M | TBD | TBD |
 
@@ -644,8 +647,27 @@ Data: gs15_m3_s5.txt, slice 4, offset 80,000,000
 | 10% | 3,906 | 5.0933 | 0.000300 | none | none |
 | 20% | 7,812 | 5.0460 | 0.000300 | none | Wo.1:1.2e5, Wo.4:1.1e5 |
 | 30% | 11,718 | 5.0170 | 0.000300 | none | none |
+| 40% | 15,624 | 4.9967 | 0.000300 | none | Wo.0:1.2e5, Wo.1:5.1e5 |
+| 50% | 19,530 | 4.9810 | 0.000300 | none | none |
+| 60% | 23,436 | 4.9683 | 0.000300 | none | none |
+| 70% | 27,342 | 4.9577 | 0.000300 | none | Wo.1:7.8e5, Wo.7:1.3e5 |
+| 80% | 31,248 | 4.9486 | 0.000300 | none | none |
+| 90% | 35,154 | 4.9407 | 0.000300 | none | none |
+| **100%** | **39,060** | **4.9336** | 0.000300 | none | none |
 
-Notes: 0.2% and 7.7% from first attempt (125737); 10–30% from restart (181714). Surgery bump absorbed by 7.7%. Wo.1/Wo.4 condition spike at 20% dropped back below 1e5 at 30% — transient, no dead directions at any point.
+Notes: 0.2% and 7.7% from first attempt (125737); 10–100% from restart (181714). Surgery bump absorbed by 7.7%. Wo condition spikes transient throughout — no dead directions at any point.
+
+### d512 ep21 (May 30, 2026)
+
+Data: cycling from ep20 shard. Plateau LR halved at ~30% (0.000300→0.000150).
+
+| Checkpoint | Batch | Loss | LR | Wo inactive | cond>1e5 |
+|---|---|---|---|---|---|
+| 10% | 3,906 | 5.0257 | 0.000300 | none | Wo.7:3.9e5 |
+| 20% | 7,812 | 4.9930 | 0.000300 | none | Wo.2:2.8e5 |
+| 30% | 11,718 | 4.9728 | 0.000150 ← halved | none | Wo.0:1.1e6, Wo.2:3.0e5 |
+| 40% | 15,624 | 4.9563 | 0.000150 | none | Wo.0:1.6e5 |
+| 50% | 19,530 | 4.9456 | 0.000150 | none | Wo.2:2.2e6, Wo.4:1.1e5, Wo.7:1.6e5 |
 
 ### VRAM profile (batch=256, w128, bfloat16, no grad_checkpoint)
 Observed 19 GB peak on training run. Main contributors:
