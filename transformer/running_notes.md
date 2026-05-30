@@ -10,17 +10,23 @@ Smaller model (32M) with a better Chinchilla ratio vs Run 3 (76M, word_tokenize)
 |---|---|---|
 | Tokenizer | word_tokenize + Counter | tiktoken gpt2 |
 | Vocab size | 50,000 (capped frequency) | 50,257 (fixed BPE) |
-| Total params | ~76M | ~32M |
+| Total params (initial) | ~76M | ~32M |
+| Total params (current, d512) | — | ~51M |
+| Total params (final planned, d768) | — | ~83M |
 
 Note: cl100k_base (128M) was attempted first and aborted — loss diverged (7.47→8.03 over first shard) with lr=0.0006, and cache files (~3.4 GB each) filled 16 GB disks on all machines.
 
-### Parameter breakdown (~32M)
-| Component | Params |
-|-----------|--------|
-| Embedding (50,257 × 256) | 12.9M |
-| Output projection (50,257 × 256) | 12.9M |
-| 8 transformer layers (4 heads, 256 dims) | 6.3M |
-| **Total** | **~32M** |
+### Parameter breakdown by expansion stage
+
+| Stage | inner_dims | Frozen (embed+out) | Trainable (core) | Total | head_dim | Batch (12GB) |
+|---|---|---|---|---|---|---|
+| w64/w256 baseline | 256 | — | ~32M | ~32M | 64 | 256 |
+| d384 | 384 | 25.8M | ~14.4M | ~40M | 96 | 256 |
+| d512 (current) | 512 | 25.8M | ~25.5M | ~51M | 128 | 256 |
+| d640 (planned) | 640 | 25.8M | ~39.6M | ~65M | 160 | 160 |
+| d768 (final) | 768 | 25.8M | ~57.0M | ~83M | 192 | 128 |
+
+Frozen = embedding (12.9M) + output projection (12.9M); constant across all stages. Baseline has no upscale/downscale (vecDims=inner_dims=256). Core trainable params scale as 96×inner_dims² (8 layers, attention+FFN). d768 is the stopping point for this experiment.
 
 ### Chinchilla ratio
 Hoffmann et al. (2022) explicitly counts embedding matrices in N ("Note that we also count embeddings matrices in the total parameter count" — Appendix F). This differs from Kaplan (2020) who used non-embedding parameters; this distinction partly explains the different scaling coefficients between the two papers.
@@ -72,8 +78,20 @@ Hoffmann et al. (2022) explicitly counts embedding matrices in N ("Note that we 
 | 3 | 82.65.196.171 | 40095 | gs11–gs15 (replacement — original power-capped at 180W) |
 | 4 | 207.102.87.207 | 52853 | gs16–gs20 |
 
-### Hypothesis: Intrinsic Entropy of Context Length Scaling
-Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a short context until near saturation, then interpolate to a longer window and continue with fresh data. The idea is that context length should grow roughly in proportion to the volume of unique tokens seen — the model earns longer context by first learning well at a shorter one. Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
+### Primary Hypothesis: Progressive Inner-Dimension Expansion
+
+Train a small model with a large number of tokens — deliberately past the Chinchilla-optimal point, or until saturation. Expand the inner transformer dimension (keeping embedding and output projection frozen) and continue training. The claim: smaller models trained beyond Chinchilla develop compact, general representations. Expanding the inner dimension at that point allows the model to build capacity on top of those representations rather than learning them from scratch.
+
+Trigger for expansion: ~70–80% of Chinchilla-optimal token count for the current N, or observed loss saturation — whichever comes first.
+
+The frozen embedding and output projection are the bridge: they carry the learned token semantics across expansions. The transformer core grows; the vocabulary interface stays fixed. Each expansion resets the Chinchilla ratio downward (larger N → larger optimal token budget), buying several more epochs of useful training before the next expansion.
+
+This is a practical strategy for consumer hardware. A model that would not fit in VRAM from scratch can be reached by training a small model that fits, then expanding progressively. The total compute is spread across smaller models at each stage, all of which fit within the VRAM budget.
+
+### Secondary Hypothesis: Context-Length Scaling
+Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a short context until near saturation, then interpolate to a longer window and continue with fresh data. Context length grows roughly in proportion to unique tokens seen — the model earns longer context by first learning well at a shorter one. Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
+
+### Chinchilla Ratio Progression
 
 | Stage | Window | N (params) | Chinchilla optimal | Tokens seen | Chinchilla % |
 |---|---|---|---|---|---|
@@ -92,10 +110,12 @@ Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a sh
 | extend_dims 512→640 (planned) | — | 51M→65M | 1,020M→1,310M | ~645M | ~49% ↓ |
 | d640 ep20+ (planned) | 256 | 65M | 1,310M | TBD | TBD |
 | extend_dims 640→768 (planned) | — | 65M→83M | 1,310M→1,660M | TBD | TBD ↓ |
+| d768 (planned, final) | 256 | 83M | 1,660M | TBD | TBD |
 
-Each interpolation step is triggered by observed loss saturation, not a fixed schedule.
+Each expansion is triggered by observed loss saturation. d768 is the final planned stage for this experiment — context interpolation deferred.
 
 ### Checkpoints — Run 4
+
 
 All local paths relative to `transformer/`. `opt` = includes Adam optimizer state. Server = M4 (207.102.87.207), code root `/root/transformer/`.
 
@@ -119,6 +139,7 @@ All local paths relative to `transformer/`. `opt` = includes Adam optimizer stat
 | d512 ep16 (SDPA) | 16 | 5.1473 | `runs/btm_d512_cont_local_20260527_070826/model.pth` | 196M | ✓ | |
 | d512 ep18 (SDPA) | 18 | 4.9953 | `runs/btm_d512_cont_local_20260527_203054/model.pth` | 196M | ✓ | |
 | d512 ep19 (SDPA) | 19 | 5.0129 | `runs/btm_d512_cont_local_20260528_223411/model.pth` | 196M | ✓ | Wo surgery applied → model_wo_repaired.pth |
+| d512 ep20 (SDPA) | 20 | 4.9336 | `btm_r2_backups/d512_ep20_sdpa.pth` | 196M | ✓ | post-surgery; run dir: btm_d512_cont_local_20260529_181714 |
 
 ### Actual training approach (decided mid-run)
 All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend context, merge.
@@ -137,10 +158,11 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 12. **d512 ep15** — btm_d512_cont profile, machine3 input_list, from model_d512.pth — in progress
 13. **d384 ep15 cont** — btm_d384_cont profile, continuing from d384 ep14 checkpoint — killed, superseded by d512
 14. **d512 ep16–19 (local)** — btm_d512_cont_local, machine3 gs11–gs14 slice 3, batch=256 — ep19 final 5.0129; Wo surgery applied to ep19 checkpoint
-15. **extend_dims 512→640** — planned after ep19; head_dim=160; 65.5M params; B=160 on 12GB
-16. **d640 continuation** — planned; a few epochs before next expansion
-17. **extend_dims 640→768** — planned; head_dim=192; 82.9M params; B=128 on 12GB
-18. **context interpolation** — planned after d768 epochs; w256→512 or 1024
+15. **extend_dims 512→640** — planned after d512 saturation; head_dim=160; ~65M params; batch=160 on 12GB
+16. **d640 continuation** — planned; train until saturation or ~70-80% Chinchilla
+17. **extend_dims 640→768** — planned; head_dim=192; ~83M params; batch=128 on 12GB
+18. **d768 continuation** — planned; final stage for this experiment
+19. **context interpolation** — deferred (outside scope of this experiment)
 
 ### Loss Log
 | | Machine 1 | Machine 2 | Machine 3 | Machine 4 |

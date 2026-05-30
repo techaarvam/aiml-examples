@@ -28,6 +28,7 @@ CHECKPOINTS = [
     ('d512_ep15_fused',    'd512f',  15,    5.7338, 'btm_r2_backups/d512_20260522/btm_d512_cont_20260522_203334/model_fused.pth'),
     ('d512_ep16_sdpa',     'd512',   16,    5.1473, 'runs/btm_d512_cont_local_20260527_070826/model.pth'),
     ('d512_ep18_sdpa',     'd512',   18,    4.9953, 'runs/btm_d512_cont_local_20260527_203054/model.pth'),
+    ('d512_ep20_sdpa',     'd512',   20,    4.9336, 'btm_r2_backups/d512_ep20_sdpa.pth'),
 ]
 
 NUM_LAYERS = 8
@@ -168,27 +169,27 @@ print(f"\n3D plots for: {plot_labels}")
 
 DARK_BG = '#1a1a2e'
 
-def make_3d_surface(metric, mat_filter, title_prefix, fname):
-    """metric = 'cond' or 'eff_rank_50'. mat_filter = list of matrix names."""
+def make_3d_surface(metric, mat_filter, title_prefix, fname, clip_pct=95):
+    """metric = 'cond' or 'eff_rank_50'. mat_filter = list of matrix names.
+    clip_pct: percentile cap applied to Z before plotting (avoids scale collapse from outliers)."""
     n = len(plot_labels)
     ncols = min(n, 3)
     nrows = (n + ncols - 1) // ncols
     fig = plt.figure(figsize=(6*ncols, 5*nrows), facecolor=DARK_BG)
 
+    # Compute per-figure Z arrays first so we can set a common clip threshold
+    all_Z = []
+    grids = []
     for idx, lbl in enumerate(plot_labels):
         sub = df[(df['label'] == lbl) & (df['matrix'].isin(mat_filter)) & (df['head'] >= 0)]
         if sub.empty:
-            # For non-head matrices (Wo, FFN)
             sub = df[(df['label'] == lbl) & (df['matrix'].isin(mat_filter))]
 
-        ax = fig.add_subplot(nrows, ncols, idx+1, projection='3d', facecolor=DARK_BG)
-
         if sub.empty or 'head' not in sub.columns:
-            ax.set_title(lbl, color='white', fontsize=8)
+            grids.append(None)
             continue
 
         if sub['head'].max() >= 0:
-            # head × layer grid
             layers = sorted(sub['layer'].unique())
             heads  = sorted(sub['head'].unique())
             Z = np.zeros((len(heads), len(layers)))
@@ -198,7 +199,6 @@ def make_3d_surface(metric, mat_filter, title_prefix, fname):
                     Z[i, j] = np.median(vals) if len(vals) else 0
             X, Y = np.meshgrid(layers, heads)
         else:
-            # layer only (Wo, FFN)
             layers = sorted(sub['layer'].unique())
             Z = np.zeros((1, len(layers)))
             for j, l in enumerate(layers):
@@ -206,12 +206,36 @@ def make_3d_surface(metric, mat_filter, title_prefix, fname):
                 Z[0, j] = np.median(vals) if len(vals) else 0
             X, Y = np.meshgrid(layers, [0])
 
+        grids.append((X, Y, Z, lbl, sub))
+        all_Z.append(Z)
+
+    # Shared clip threshold across all subplots in this figure
+    if all_Z:
+        all_vals = np.concatenate([z.ravel() for z in all_Z])
+        finite_vals = all_vals[np.isfinite(all_vals)]
+        vmax = float(np.percentile(finite_vals, clip_pct)) if len(finite_vals) else 1.0
+    else:
+        vmax = 1.0
+
+    for idx, lbl in enumerate(plot_labels):
+        ax = fig.add_subplot(nrows, ncols, idx+1, projection='3d', facecolor=DARK_BG)
+        if grids[idx] is None:
+            ax.set_title(lbl, color='white', fontsize=8)
+            continue
+
+        X, Y, Z, lbl, sub = grids[idx]
+        clipped = np.clip(Z, 0, vmax)
+        n_clipped = int(np.sum(Z > vmax))
+
         epoch_str = f"ep{loaded[plot_indices[idx]][2]}" if loaded[plot_indices[idx]][2] else 'merge'
         loss_val  = loaded[plot_indices[idx]][3]
         loss_str  = f" loss={loss_val:.4f}" if loss_val else ''
+        clip_note = f" [clip>{vmax:.0f}:{n_clipped}]" if n_clipped else ''
+
         ax.set_facecolor(DARK_BG)
-        surf = ax.plot_surface(X, Y, Z, cmap='plasma', edgecolor='none', alpha=0.9)
-        ax.set_title(f"{lbl}\n{epoch_str}{loss_str}", color='white', fontsize=7)
+        ax.plot_surface(X, Y, clipped, cmap='plasma', edgecolor='none', alpha=0.9,
+                        vmin=0, vmax=vmax)
+        ax.set_title(f"{lbl}\n{epoch_str}{loss_str}{clip_note}", color='white', fontsize=7)
         ax.set_xlabel('Layer', color='#aaa', fontsize=7, labelpad=2)
         ax.set_ylabel('Head',  color='#aaa', fontsize=7, labelpad=2)
         zlabel = 'Cond #' if metric == 'cond' else 'Eff rank 50%'
@@ -223,7 +247,8 @@ def make_3d_surface(metric, mat_filter, title_prefix, fname):
         for pane in [ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane]:
             pane.set_edgecolor('#333')
 
-    fig.suptitle(f'{title_prefix} — {metric}', color='white', fontsize=11, y=1.01)
+    clip_label = f'p{clip_pct} clip'
+    fig.suptitle(f'{title_prefix} — {metric} ({clip_label})', color='white', fontsize=11, y=1.01)
     plt.tight_layout()
     plt.savefig(os.path.join(OUT, fname), dpi=130, bbox_inches='tight', facecolor=DARK_BG)
     plt.close()
