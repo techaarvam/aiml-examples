@@ -20,6 +20,7 @@ output_size     = 50
 lr_schedule     = "plateau"
 use_custom_norm = false
 quantize        = false
+data_stride     = 256
 
 # ── Smoke: 5 epochs, tiny model, small dataset ────
 # Purpose: verify code runs end-to-end in a few minutes
@@ -186,7 +187,167 @@ num_layers        = 8
 window_size       = 256
 batch_size        = 512
 epochs            = 30
+lr                = 0.00015
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# ── BTM d1024 local · --start_epoch 31 · inner_dims 512→1024 expansion ──────
+# Start: model_d1024.pth (51M→127M params, warm-start identity, from btm_d512_cont_local ep30)
+# Chinchilla (127M): ep31-88 stride=1024 (+5M/ep) + ep89-157 stride=256 (+20M/ep) → 100% at ep157
+# batch=256: safe starting point for 12 GB with 127M params + grad_checkpoint.
+[btm_d1024_local]
+_desc             = "BTM round 2 · d1024 local · ep31-88 · RTX 5070 12GB · ~80% Chinchilla at ep88"
+vecDims           = 256
+inner_dims        = 1024
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 256
+epochs            = 201
+lr                = 0.0002
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# ══════════════════════════════════════════════════════════════════════
+# Progressive cold-start run: 256→384→512→640→768→896→1024
+# Each stage runs to Chinchilla 100% (20×N tokens at 20M/epoch).
+# Orchestrated by run_progressive.sh using extend_dims_sigma.py.
+# Checkpoint dir: runs/progressive/checkpoint/model.pth (overwritten every 5 epochs)
+# Entropy CSV:    runs/progressive/entropy.csv (appended every 5 epochs)
+# ══════════════════════════════════════════════════════════════════════
+
+# d256 — ~32M params — 32 epochs to Chinchilla 100%
+[progressive_d256]
+_desc             = "Progressive cold-start · d256 · 32 epochs · ~32M params"
+vecDims           = 256
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 512
+epochs            = 32
 lr                = 0.0003
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = false
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# d384 — ~40M params — 40 epochs to Chinchilla 100%
+# lr: 0.0003 × 384/512 = 0.000225
+[progressive_d384]
+_desc             = "Progressive · d384 · 40 epochs · ~40M params"
+vecDims           = 256
+inner_dims        = 384
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 384
+epochs            = 40
+lr                = 0.000225
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = false
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# d512 — ~51M params — 51 epochs to Chinchilla 100%
+# lr: 0.0003 × 256/512 = 0.000150
+[progressive_d512]
+_desc             = "Progressive · d512 · 51 epochs · ~51M params"
+vecDims           = 256
+inner_dims        = 512
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 256
+epochs            = 51
+lr                = 0.000150
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# d640 — ~66M params — 66 epochs to Chinchilla 100%
+# lr: 0.0003 × 160/512 = 0.000094
+[progressive_d640]
+_desc             = "Progressive · d640 · 66 epochs · ~66M params"
+vecDims           = 256
+inner_dims        = 640
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 160
+epochs            = 66
+lr                = 0.000094
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# d768 — ~83M params — 83 epochs to Chinchilla 100%
+# lr: 0.0003 × 128/512 = 0.000075
+[progressive_d768]
+_desc             = "Progressive · d768 · 83 epochs · ~83M params"
+vecDims           = 256
+inner_dims        = 768
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 128
+epochs            = 83
+lr                = 0.000075
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# d896 — ~103M params — 104 epochs to Chinchilla 100%
+# lr: 0.0003 × 96/512 = 0.000056
+[progressive_d896]
+_desc             = "Progressive · d896 · 104 epochs · ~103M params"
+vecDims           = 256
+inner_dims        = 896
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 96
+epochs            = 104
+lr                = 0.000056
+lr_schedule       = "none"
+float_type        = "bfloat16"
+grad_checkpoint   = true
+max_tokens        = 20000000
+tiktoken_encoding = "gpt2"
+input_list        = "raw_data/btm_machines/machine3/input_list.json"
+
+# d1024 — ~127M params — 127 epochs to Chinchilla 100%
+# lr: 0.0003 × 64/512 = 0.000038
+[progressive_d1024]
+_desc             = "Progressive · d1024 · 127 epochs · ~127M params"
+vecDims           = 256
+inner_dims        = 1024
+num_heads         = 4
+num_layers        = 8
+window_size       = 256
+batch_size        = 64
+epochs            = 127
+lr                = 0.000038
+lr_schedule       = "none"
 float_type        = "bfloat16"
 grad_checkpoint   = true
 max_tokens        = 20000000

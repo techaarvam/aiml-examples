@@ -6,6 +6,8 @@ def parse_args():
     parser.add_argument('--num_heads', type=int, default=8, help='Number of attention heads')
     parser.add_argument('--num_layers', type=int, default=6, help='Number of transformer layers')
     parser.add_argument('--window_size', type=int, default=100, help='Window size for input sequences')
+    parser.add_argument('--data_stride', type=int, default=1,
+        help='Start-position stride between training windows. Default 1 preserves the old fully-overlapping dataset; set to window_size-1 for mostly non-overlapping next-token targets.')
     parser.add_argument('--batch_size', type=int, default=32, help='Training batch size')
     parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
@@ -50,12 +52,26 @@ def parse_args():
         help='Min-p threshold: fraction of top-token prob below which tokens are dropped (default 0.05)')
     parser.add_argument('--inner_dims', type=int, default=None,
         help='Expanded inner transformer dimension (d’). When set, frozen embedding/output adapters bridge vecDims→inner_dims. Use extend_dims.py to create the starting checkpoint.')
+    parser.add_argument('--mlp_boost_old_d', type=int, default=0,
+        help='Previous inner_dims before the most recent expansion. When > 0: gradient hooks multiply new-dim gradients by --mlp_boost to accelerate warm-up. Set to 0 to disable.')
+    parser.add_argument('--mlp_boost', type=float, default=4.0,
+        help='Gradient multiplier applied to new MLP dims when --mlp_boost_old_d is active (default 4.0).')
     parser.add_argument('--lr_warmup_target', type=float, default=0.0,
         help='ending LR after warmup. 10% of the epoch is the duration for the warmup hard coded currently')
     parser.add_argument('--reset_optimizer_every_epoch', action='store_true', default=False,
         help='Discard optimizer state at the start of each epoch after the first. Cold Adam restart each epoch.')
     parser.add_argument('--reset_adam_v_every_epoch', action='store_true', default=False,
         help='Zero exp_avg_sq (v_t) at the start of each epoch after the first, keeping exp_avg (m_t). Clears stale scale estimates while preserving directional momentum.')
+    parser.add_argument('--dataloader_workers', type=int, default=2,
+        help='Number of DataLoader worker processes for background batch prefetching (default 2)')
+    parser.add_argument('--prefetch_factor', type=int, default=4,
+        help='Batches to prefetch per DataLoader worker (default 4)')
+    parser.add_argument('--shared_checkpoint_dir', type=str, default=None,
+        help='If set, save model-only checkpoint here every --shared_checkpoint_every epochs (overwrites). Used by run_progressive.sh to bridge stages.')
+    parser.add_argument('--shared_checkpoint_every', type=int, default=5,
+        help='Save to --shared_checkpoint_dir every N epochs (default 5)')
+    parser.add_argument('--entropy_csv', type=str, default=None,
+        help='If set, append spectral entropy row to this CSV every --shared_checkpoint_every epochs.')
     return parser.parse_args()
 
 args = parse_args()

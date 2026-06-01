@@ -8,5 +8,5 @@ cd /home/rambala/work/learn/aiml/transformer
 systemd-inhibit --what=idle:sleep --why="d512 local training" \
 python runner.py runs.toml btm_d512_cont_local \
     --resume \
-    --start_epoch 20 \
-    --model_file /home/rambala/work/learn/aiml/transformer/runs/btm_d512_cont_local_20260528_223411/model_wo_repaired.pth
+    --start_epoch 21 \
+    --model_file /home/rambala/work/learn/aiml/transformer/runs/btm_d512_cont_local_20260529_181714/model.pth

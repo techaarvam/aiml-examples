@@ -8,6 +8,7 @@ import sys
 import os
 import json
 import time
+import concurrent.futures
 import DataInput
 import torch
 import numpy as np
@@ -60,15 +61,26 @@ dbg_output(f"Model parameters: {total_params:,} total, {trainable_params:,} trai
 start_epoch = 0
 checkpoint = None
 
+def _remap_state_dict(sd):
+    import re
+    out = {}
+    for k, v in sd.items():
+        k = k.replace('_orig_mod.', '')
+        # Sequential MLP keys (mlp.L.0/2.*) → _MLP keys (mlp.L.fc1/fc2.*)
+        k = re.sub(r'^(mlp\.\d+)\.0\.(weight|bias)$', r'\1.fc1.\2', k)
+        k = re.sub(r'^(mlp\.\d+)\.2\.(weight|bias)$', r'\1.fc2.\2', k)
+        out[k] = v
+    return out
+
 if args.model_file:
     checkpoint = torch.load(args.model_file, map_location=common.device)
     if isinstance(checkpoint, dict) and 'model' in checkpoint:
-        state_dict = {k.replace('_orig_mod.', ''): v for k, v in checkpoint['model'].items()}
+        state_dict = _remap_state_dict(checkpoint['model'])
         transformer.load_state_dict(state_dict)
         transformer = transformer.to(common.dtype)
         dbg_output(f"Loaded model from {args.model_file} (saved after epoch {checkpoint.get('epoch', '?')})")
     else:
-        state_dict = {k.replace('_orig_mod.', ''): v for k, v in checkpoint.items()}
+        state_dict = _remap_state_dict(checkpoint)
         transformer.load_state_dict(state_dict)
         transformer = transformer.to(common.dtype)
         checkpoint = None  # old format, no optimizer/epoch state
@@ -164,10 +176,16 @@ if not args.model_file or args.resume:
     interactive    = sys.stdout.isatty()
     progress_file  = os.path.join(os.path.dirname(args.save_model), "progress.txt") \
                      if args.save_model else None
-    train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+    _dl_kwargs = dict(batch_size=args.batch_size, shuffle=True,
+                      num_workers=args.dataloader_workers,
+                      prefetch_factor=args.prefetch_factor,
+                      persistent_workers=args.dataloader_workers > 0)
+    train_loader    = DataLoader(dIn, **_dl_kwargs)
     total_batches   = len(train_loader)
     heartbeat_every = max(1, total_batches // 10)
     _current_file = args.input if _cycling else None
+    _prefetch_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    _prefetch_future: concurrent.futures.Future | None = None
 
 
     def reset_adam_v(opt):
@@ -193,16 +211,54 @@ if not args.model_file or args.resume:
             if _cycling:
                 epoch_file = _input_files[i % len(_input_files)]
                 if epoch_file != _current_file:
-                    _current_file   = epoch_file
-                    args.input      = epoch_file
-                    args.cache_file  = None
-                    args.start_epoch = i
+                    _current_file = epoch_file
                     dbg_output(f"Input [{i % len(_input_files) + 1}/{len(_input_files)}]: {epoch_file}")
-                    dIn             = DataInput.DataInput()
-                    train_loader    = DataLoader(dIn, batch_size=args.batch_size, shuffle=True)
+                    if _prefetch_future is not None and _prefetch_future.done():
+                        # use pre-tokenized data from background thread
+                        indices = _prefetch_future.result()
+                        _prefetch_future = None
+                        dIn.indices    = indices
+                        dIn.data_stride = args.data_stride
+                    else:
+                        # fallback: tokenize synchronously (first epoch or future not ready)
+                        if _prefetch_future is not None:
+                            indices = _prefetch_future.result()  # wait for it
+                            _prefetch_future = None
+                            dIn.indices    = indices
+                            dIn.data_stride = args.data_stride
+                        else:
+                            args.input      = epoch_file
+                            args.cache_file = None
+                            args.start_epoch = i
+                            dIn = DataInput.DataInput()
+                    train_loader    = DataLoader(dIn, **_dl_kwargs)
                     total_batches   = len(train_loader)
                     heartbeat_every = max(1, total_batches // 10)
-            dbg_output(f"Epoch {i+1}/{args.epochs} starting...")
+
+            # kick off pre-tokenization for next epoch while this one trains
+            if _cycling:
+                next_file = _input_files[(i + 1) % len(_input_files)]
+                if next_file != _current_file and _prefetch_future is None:
+                    dbg_output(f"Pre-fetching next input: {next_file}")
+                    _prefetch_future = _prefetch_executor.submit(
+                        DataInput._tokenize_file,
+                        next_file, dIn.enc, args.max_tokens, i + 1, args.data_stride)
+            _ts = time.strftime('%Y-%m-%d %H:%M:%S')
+            dbg_output(f"Epoch {i+1}/{args.epochs} starting...  [{_ts}]")
+            if i == start_epoch and torch.cuda.is_available():
+                _vram_alloc = torch.cuda.memory_allocated() / 1024**3
+                _vram_res   = torch.cuda.memory_reserved()  / 1024**3
+                dbg_output(f"  VRAM: {_vram_alloc:.2f} GB allocated / {_vram_res:.2f} GB reserved")
+                try:
+                    import subprocess as _sp
+                    _smi = _sp.check_output(
+                        ['nvidia-smi', '--query-gpu=power.draw,power.limit',
+                         '--format=csv,noheader,nounits'],
+                        text=True).strip()
+                    _draw, _limit = [x.strip() for x in _smi.split(',')]
+                    dbg_output(f"  Power: {_draw} W draw / {_limit} W limit")
+                except Exception:
+                    pass
             if args.reset_adam_v_every_epoch:
                 reset_adam_v(optimizer)
                 dbg_output(f"  Adam v_t reset: exp_avg_sq zeroed, exp_avg kept, lr={args.lr}")
@@ -255,7 +311,7 @@ if not args.model_file or args.resume:
                     loss_t = loss_fn(output, dLabels[...,:-1])
                     loss_t.backward()
                     loss = loss_t.item()
-                torch.nn.utils.clip_grad_norm_(transformer.parameters(), 1.0)
+                grad_norm = torch.nn.utils.clip_grad_norm_(transformer.parameters(), 1.0)
                 optimizer.step()
                 prof.step()
 
@@ -270,7 +326,7 @@ if not args.model_file or args.resume:
     
                 if not interactive and num_batches % heartbeat_every == 0:
                     avg = total_loss / num_batches
-                    dbg_output(f"  [{num_batches}/{total_batches}] loss={avg:.4f}")
+                    dbg_output(f"  [{num_batches}/{total_batches}] loss={avg:.4f}  grad_norm={grad_norm:.3f}")
                     getattr(transformer, '_orig_mod', transformer).dbg_output_health_check()
                     if scheduler and args.lr_schedule == 'plateau':
                         scheduler.step(avg)
@@ -303,6 +359,20 @@ if not args.model_file or args.resume:
             # End of batch inner loop
             torch.save({'model': transformer.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': i+1}, args.save_model)
             dbg_output(f"Checkpoint saved to {args.save_model}")
+
+            if args.shared_checkpoint_dir and (i + 1) % args.shared_checkpoint_every == 0:
+                import subprocess
+                os.makedirs(args.shared_checkpoint_dir, exist_ok=True)
+                shared_pth = os.path.join(args.shared_checkpoint_dir, 'model.pth')
+                torch.save({'model': transformer.state_dict(), 'epoch': i+1}, shared_pth)
+                dbg_output(f"Shared checkpoint saved → {shared_pth}")
+                if args.entropy_csv:
+                    subprocess.Popen([
+                        sys.executable, 'analyze_checkpoints.py',
+                        '--extract-single', shared_pth,
+                        '--epoch', str(i + 1),
+                        '--output-csv', args.entropy_csv,
+                    ])
 
         # End of Epoch Loop
 

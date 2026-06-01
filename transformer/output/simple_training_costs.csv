@@ -1,0 +1,7 @@
+model,strategy,params,tokens,pflops,total_hours,total_days,total_cost_usd,stage_plan
+100M,Progressive ladder,32M->100M,2000000000,792.00,1941.18,80.88,155.29,stage 1: 32M on RTX 5070 | stage 2: 46M on RTX 5070 | stage 3: 59M on RTX 5070 | stage 4: 73M on RTX 5070 | stage 5: 86M on RTX 5070 | stage 6: 100M on RTX 5070
+100M,Direct smallest-fit,100M,2000000000,1200.00,2941.18,122.55,235.29,direct on RTX 5070
+100M,Direct B200,100M,2000000000,1200.00,130.72,5.45,554.25,direct on B200
+1B,Progressive ladder,100M->1000M,20000000000,66000.00,38194.51,1591.44,61581.53,stage 1: 100M on RTX 5070 | stage 2: 200M on RTX 3090 | stage 3: 300M on A100-40 | stage 4: 400M on A100-80 | stage 5: 500M on A100-80 | stage 6: 600M on A100-80 | stage 7: 700M on H200 | stage 8: 800M on H200 | stage 9: 900M on H200 | stage 10: 1000M on H200
+1B,Direct smallest-fit,1000M,20000000000,120000.00,29411.76,1225.49,117647.06,direct on H200
+1B,Direct B200,1000M,20000000000,120000.00,13071.90,544.66,55424.84,direct on B200

@@ -1,5 +1,106 @@
 # Transformer Model Experiments - Running Notes
 
+## Run 5 — Progressive Cold-Start: 256→384→512→640→768→896→1024 (Jun 1, 2026)
+
+### Goal
+Clean baseline run with correct progressive expansion throughout. Eliminates the `extend_dims.py` bug that compromised Run 4 from the 384→512 stage onward. Each stage trained to Chinchilla 100% before expanding.
+
+### Architecture
+| Parameter | Value |
+|---|---|
+| vecDims | 256 (frozen embedding/output throughout) |
+| num_heads | 4 |
+| num_layers | 8 |
+| window_size | 256 |
+| tiktoken | gpt2 (50,257 vocab) |
+| data | All 20 OpenWebText shards, all 4 machines (~9.1B tokens) |
+| stride | 256 (20M tokens/epoch) |
+| lr | 0.0003, no schedule |
+| float | bfloat16 |
+
+### Stage Plan
+
+LR scaled linearly with batch size (linear scaling rule, reference: batch=512 → lr=0.0003).
+
+| Stage | inner_dims | N (params) | Chinchilla 100% | Epochs | batch | lr |
+|---|---|---|---|---|---|---|
+| d256 | 256 | ~32M | 640M tokens | 32 | 512 | 0.000300 |
+| d384 | 384 | ~40M | 800M tokens | 40 | 384 | 0.000225 |
+| d512 | 512 | ~51M | 1,020M tokens | 51 | 256 | 0.000150 |
+| d640 | 640 | ~66M | 1,310M tokens | 66 | 160 | 0.000094 |
+| d768 | 768 | ~83M | 1,660M tokens | 83 | 128 | 0.000075 |
+| d896 | 896 | ~103M | 2,070M tokens | 104 | 96 | 0.000056 |
+| d1024 | 1024 | ~127M | 2,540M tokens | 127 | 64 | 0.000038 |
+
+Total: 507 epochs across all stages. Data covers d1024 Chinchilla (2,540M < 9.1B available).
+
+### Expansion Strategy — extend_dims_sigma.py
+SVD sigma-based diagonal noise. For each weight matrix W:
+- Old weights preserved exactly in top-left block (rotations intact)
+- New-new diagonal: `0.01 × median(σ)` of source matrix — noise proportional to spectral scale
+- Cross blocks (old×new, new×old): zero
+- Upscale/downscale: carry trained rows/cols, zeros for new dims
+- Epoch counter reset to 0 on each expansion (each stage starts from epoch 1)
+
+```bash
+python extend_dims_sigma.py input.pth output.pth <inner_dims>
+python extend_dims_sigma.py input.pth output.pth <inner_dims> --keep-epoch  # preserve epoch number
+```
+
+### Checkpoint Architecture
+Every 5 epochs the trainer saves a model-only checkpoint (no optimizer state) to a fixed shared directory. This is what the orchestration script uses to extend between stages.
+
+```
+runs/progressive/
+  checkpoint/model.pth    ← overwritten every 5 epochs (model state only)
+  entropy.csv             ← spectral entropy appended every 5 epochs
+```
+
+The main run directory (timestamped) still saves the full checkpoint (model + optimizer) every epoch for resume capability within a stage.
+
+### Entropy Tracking — analyze_checkpoints.py
+Every 5 epochs, launched as a non-blocking subprocess by the trainer:
+```bash
+python analyze_checkpoints.py --extract-single runs/progressive/checkpoint/model.pth \
+    --epoch <N> --output-csv runs/progressive/entropy.csv
+```
+Appends one row per call: `epoch, ffn_up_L0..L7, ffn_dn_L0..L7, wo_L0..L7, q/k/v_L{l}_h{h}`.
+
+### Orchestration — run_progressive.sh
+
+```bash
+# Full run from scratch
+bash run_progressive.sh
+
+# Skip completed stages, extend to d512 and train fresh
+bash run_progressive.sh --start-from d512
+
+# Resume interrupted d512 run from shared checkpoint (no re-extend)
+bash run_progressive.sh --start-from d512 --no-extend
+
+# Resume with explicit epoch override
+bash run_progressive.sh --start-from d512 --no-extend --resume-epoch 23
+```
+
+### runs.toml Profiles
+One profile per stage: `progressive_d256`, `progressive_d384`, `progressive_d512`, `progressive_d640`, `progressive_d768`, `progressive_d896`, `progressive_d1024`.
+
+### Scripts Summary
+| Script | Purpose |
+|---|---|
+| `run_progressive.sh` | Top-level orchestration — runs all stages sequentially |
+| `extend_dims_sigma.py` | Expansion: SVD sigma noise, correct inner_dims detection |
+| `extend_dims.py` | Expansion: diagonal noise (bug-fixed Jun 1, 2026) |
+| `extend_dims_svd.py` | Expansion: block-diagonal SVD (exact ×2 only) |
+| `analyze_checkpoints.py` | Matrix analysis + `--extract-single` entropy CSV mode |
+
+### Loss Log
+
+| Stage | Epoch | Loss | Notes |
+|---|---|---|---|
+
+---
+
 ## Run 4 — BTM Round 2: tiktoken gpt2 50k, w64, ~32M params, 4 machines (May 19, 2026)
 
 ### Goal
@@ -108,14 +209,18 @@ Inspired by *Intrinsic Entropy of Context Length Scaling in LLMs*. Train at a sh
 | d512 ep18 (local) | 256 | 51M | 1,020M | ~625M | ~61% |
 | d512 ep19 (local) | 256 | 51M | 1,020M | ~645M | ~63% |
 | d512 ep20 (local) | 256 | 51M | 1,020M | ~665M | ~65% |
-| d512 ep21 (local) | 256 | 51M | 1,020M | ~685M | ~67% |
-| d512 ep22 (local) | 256 | 51M | 1,020M | ~705M | ~69% |
-| extend_dims 512→640 (planned, after ep22) | — | 51M→65M | 1,020M→1,310M | ~705M | ~54% ↓ |
-| d640 (planned) | 256 | 65M | 1,310M | TBD | TBD |
-| extend_dims 640→768 (planned) | — | 65M→83M | 1,310M→1,660M | TBD | TBD ↓ |
-| d768 (planned, final) | 256 | 83M | 1,660M | TBD | TBD |
-
-Each expansion is triggered by observed loss saturation. d768 is the final planned stage for this experiment — context interpolation deferred.
+| d512 ep21 (local, stride=1) | 256 | 51M | 1,020M | ~685M | ~67% |
+| d512 ep21 stride128 | 256 | 51M | 1,020M | ~705M | ~69% |
+| d512 ep22 stride128 | 256 | 51M | 1,020M | ~725M | ~71% |
+| d512 ep23 stride128 | 256 | 51M | 1,020M | ~745M | ~73% |
+| d512 ep24 stride128 | 256 | 51M | 1,020M | ~765M | ~75% |
+| d512 ep25 stride128 | 256 | 51M | 1,020M | ~785M | ~77% |
+| d512 ep26 stride128 | 256 | 51M | 1,020M | ~805M | ~79% |
+| d512 ep27 stride128 | 256 | 51M | 1,020M | ~825M | ~81% |
+| d512 ep28 stride128 | 256 | 51M | 1,020M | ~845M | ~83% |
+| d512 ep29 stride128 | 256 | 51M | 1,020M | ~865M | ~85% |
+| d512 ep30 stride128 | 256 | 51M | 1,020M | ~885M | ~87% |
+| extend_dims 512→1024 | — | 51M→127M | 1,020M→2,540M | ~885M | ~34.8% ↓ |
 
 ### Checkpoints — Run 4
 
@@ -161,11 +266,14 @@ All machines saturated at ~6.09 after 6-8 epochs. Decision: stop early, extend c
 12. **d512 ep15** — btm_d512_cont profile, machine3 input_list, from model_d512.pth — in progress
 13. **d384 ep15 cont** — btm_d384_cont profile, continuing from d384 ep14 checkpoint — killed, superseded by d512
 14. **d512 ep16–19 (local)** — btm_d512_cont_local, machine3 gs11–gs14 slice 3, batch=256 — ep19 final 5.0129; Wo surgery applied to ep19 checkpoint
-15. **extend_dims 512→640** — planned after d512 saturation; head_dim=160; ~65M params; batch=160 on 12GB
-16. **d640 continuation** — planned; train until saturation or ~70-80% Chinchilla
-17. **extend_dims 640→768** — planned; head_dim=192; ~83M params; batch=128 on 12GB
-18. **d768 continuation** — planned; final stage for this experiment
-19. **context interpolation** — deferred (outside scope of this experiment)
+15. **d512 ep20–21 (local)** — btm_d512_cont_local, post-Wo repair, batch=512, stride=1 — ep21 loss 4.9207
+16. **d512 stride128 continuation** — btm_d512_cont_local, `data_stride=128`, 306 batches/epoch — ep21 loss 4.9000, ep22 loss 5.1286
+17. **d512 stride128 ep23–30** — planned continuation to ~885M counted tokens
+18. **extend_dims 512→640** — planned after ep30; head_dim=160; ~65M params; batch=160 on 12GB
+19. **d640 continuation** — planned; train until saturation or ~70-80% Chinchilla
+20. **extend_dims 640→768** — planned; head_dim=192; ~83M params; batch=128 on 12GB
+21. **d768 continuation** — planned; final stage for this experiment
+22. **context interpolation** — deferred (outside scope of this experiment)
 
 ### Loss Log
 | | Machine 1 | Machine 2 | Machine 3 | Machine 4 |
@@ -669,6 +777,77 @@ Data: cycling from ep20 shard. Plateau LR halved at ~30% (0.000300→0.000150).
 | 40% | 15,624 | 4.9563 | 0.000150 | none | Wo.0:1.6e5 |
 | 50% | 19,530 | 4.9456 | 0.000150 | none | Wo.2:2.2e6, Wo.4:1.1e5, Wo.7:1.6e5 |
 
+### Data stride change — d512 local continuation (May 30, 2026)
+
+Run dir: `runs/btm_d512_cont_local_20260530_185718/`
+Starting checkpoint: `runs/btm_d512_cont_local_20260529_181714/model.pth` (saved after epoch 21)
+
+| Parameter | Value |
+|---|---|
+| data_stride | 128 |
+| window_size | 256 |
+| batch_size | 512 |
+| max_tokens | 20,000,000 |
+| dataset windows/epoch | 156,248 |
+| batches/epoch | 306 |
+| counted tokens/epoch | 20M |
+| lr | 0.000150 |
+| planned stop | epoch 30 |
+
+`data_stride=128` changes dataset start positions from every token to every 128 tokens. The target remains next-token shifted by +1.
+
+| Epoch | Data | Loss | Elapsed | Notes |
+|---|---|---|---|---|
+| 21 | gs1_m1_s1.txt, slice 4 offset 80M | 4.9000 | 6.0 min | stride=128 |
+| 22 | gs2_m1_s2.txt, slice 4 offset 80M | 5.1286 | 7.5 min | stride=128 |
+| 23 | gs3_m1_s3.txt, slice 4 offset 80M | 5.1441 | — | stride=128 |
+| 24 | gs4_m1_s4.txt, slice 4 offset 80M | 5.1270 | 8.0 min | stride=128 |
+| 25 | gs5_m1_s5.txt | 5.1075 | — | stride=128 |
+| 26 | gs6_m2_s1.txt | 5.1003 | — | stride=128 |
+| 27 | gs7_m2_s2.txt | 5.0909 | — | stride=128 |
+| 28 | gs8_m2_s3.txt | 5.0923 | — | stride=128 |
+| 29 | gs9_m2_s4.txt | 5.1000 | — | stride=128 |
+| 30 | gs10_m2_s5.txt | 5.0927 | — | stride=128 |
+
+### d1024 ep31+ — btm_d1024_local (May 31, 2026)
+
+Run dir: `runs/btm_d1024_local_20260531_170625/`
+Starting checkpoint: `runs/btm_d512_cont_local_20260530_185718/model_d1024_diag2.pth`
+init: diagonal noise in true new-new block [512:1024, 512:1024]; upscale/downscale carry trained d512 weights
+inner_dims: 512→1024, params: 51M→127M, batch=256, stride=256 (20M tokens/epoch), lr=0.0002
+
+Run dir (ep31–42): `runs/btm_d1024_local_20260531_170625/`
+Run dir (ep43+):  `runs/btm_d1024_local_20260531_184831/`  lr_schedule=none, lr=0.0002 fixed
+
+| Epoch | Loss (batch 300/306) | LR | Notes |
+|---|---|---|---|
+| 31 | ~6.45 | 0.000200 | 8.26→6.58 within epoch; grad_norm 6.4→2.8 |
+| 32 | ~5.98 | 0.000200 | |
+| 33 | ~5.86 | 0.000200 | |
+| 34 | ~5.76 | 0.000200 | |
+| 35 | ~5.71 | 0.000200 | |
+| 36 | ~5.67 | 0.000200 | |
+| 37 | ~5.61 | 0.000200 | |
+| 38 | ~5.59 | 0.000050 | plateau fired |
+| 39 | ~5.58 | 0.000025 | plateau fired again |
+| 40 | ~5.56 | 0.000006 | plateau fired again |
+| 41 | ~5.55 | 0.000002 | plateau fired again |
+| 42 | ~5.58 | 0.000000 | LR dead; stalled |
+| 43 | 5.5293 | 0.000200 | restarted fixed LR, ep42 checkpoint |
+| 44 | 5.5505 | 0.000200 | |
+| 45 | 5.5366 | 0.000200 | |
+| 46 | 5.4968 | 0.000200 | |
+| 47 | 5.4861 | 0.000200 | |
+| 48 | 5.4830 | 0.000200 | |
+| 49 | 5.4579 | 0.000200 | |
+| 50 | 5.4481 | 0.000200 | |
+| 51 | 5.4399 | 0.000200 | |
+| 52 | 5.4302 | 0.000200 | |
+| 53 | 5.4103 | 0.000200 | |
+| 54 | 5.4050 | 0.000200 | |
+| 55 | 5.4010 | 0.000200 | |
+| 56 | 5.4022 | 0.000200 | oscillating ~5.40 |
+
 ### VRAM profile (batch=256, w128, bfloat16, no grad_checkpoint)
 Observed 19 GB peak on training run. Main contributors:
 | Component | Size |
@@ -687,6 +866,68 @@ Run 4 Chinchilla % at ep13 end (N = 32M, optimal = 640M tokens): ~525M = **~82% 
 
 ### Diagram
 ![Run 4 BTM](run4_btm.svg)
+
+---
+
+### extend_dims.py Bug — Run 4 Data Integrity
+
+**Bug:** `d = state['embedding.weight'].shape[1]` returned `vec_d=256` (embedding dim) instead of the actual current inner_dims. Used to compute the diagonal noise boundary in all extended matrices.
+
+**Effect per expansion:**
+| Expansion | Correct d | Bug used d | Corrupted region |
+|---|---|---|---|
+| 256→384 | 256 | 256 | None — vec_d = inner_dims at this stage |
+| 384→512 | 384 | 256 | Wo, QKV, FFN new-new block placed at [256:, 256:] instead of [384:, 384:] → overwrote trained weights in [256:384, 256:384] |
+| 512→1024 | 512 | 256 | Same — overwrote trained weights in [256:512, 256:512] of all matrices |
+
+**Consequence:** All d512 and d1024 runs in Run 4 are built on a corrupted 384→512 expansion. The Wo SVD repair at ep19 partially mitigated the damage but did not restore overwritten weight values.
+
+**Fix:** `d` now detected from `Wo.0.shape[0]`. Upscale/downscale also fixed to carry trained weights rather than creating a fresh identity. Applied from `model_d1024_diag2.pth` onward (Jun 1, 2026).
+
+**Run 4 status:** Compromised from 384→512 expansion onward. Progressive cold-start run (`run_progressive.sh`) initiated as clean baseline using `extend_dims_sigma.py` (fixed).
+
+---
+
+### Spectral Entropy — Weight Matrix Analysis
+
+Script: `plot_ffn_entropy.py` → `output/ffn_entropy_capacity_all.png`
+
+Metric: `norm_entropy = H / log(rank)`,  `H = −Σ p_i log(p_i)`,  `p_i = σ_i / Σσ`  ∈ [0, 1]  
+Panels: FFN_up / Wo / Q / K / V heatmaps (per layer × global epoch, linear x-axis) + mean-per-matrix line chart.
+
+| Checkpoint | global ep | FFN_up | Wo | Q | K | V | loss |
+|---|---|---|---|---|---|---|---|
+| w64 m1–m4 | 7 | 0.9933 | 0.9580 | 0.9916 | 0.9916 | 0.9915 | 6.0920 |
+| w128 m1–m4 | 8 | 0.9933 | 0.9571 | 0.9916 | 0.9916 | 0.9915 | 5.9181 |
+| btm_merged | 10 | 0.9934 | 0.9572 | 0.9916 | 0.9916 | 0.9915 | — |
+| w128c ep12 | 12 | 0.9935 | 0.9564 | 0.9916 | 0.9916 | 0.9915 | 5.7632 |
+| w256 ep13 | 13 | 0.9936 | 0.9563 | 0.9916 | 0.9916 | 0.9915 | 5.6670 |
+| d512u ep15 | 15 | 0.9486 | 0.9234 | 0.9916 | 0.9916 | 0.9300 | 5.7338 |
+| d512f ep15 | 15 | 0.9486 | 0.9234 | 0.9916 | 0.9916 | 0.9300 | 5.7338 |
+| d512 ep16 | 16 | 0.9493 | 0.9246 | 0.9916 | 0.9915 | 0.9457 | 5.1473 |
+| d512 ep18 | 18 | 0.9485 | 0.9243 | 0.9916 | 0.9915 | 0.9492 | 4.9953 |
+| d512 ep19 | 19 | 0.9453 | 0.9230 | 0.9915 | 0.9915 | 0.9506 | 5.0129 |
+| d512 ep19r (Wo repair) | 19 | 0.9453 | 0.8902 | 0.9915 | 0.9915 | 0.9506 | — |
+| d512 ep20 | 20 | 0.9627 | 0.9094 | 0.9916 | 0.9915 | 0.9126 | 4.9336 |
+
+---
+
+### References
+
+| Paper | Authors | Year | arXiv / URL |
+|---|---|---|---|
+| The Effective Rank: A Measure of Effective Dimensionality | Roy & Vetterli | 2007 | [eurasip.org](https://www.eurasip.org/Proceedings/Eusipco/Eusipco2007/Papers/a5p-h05.pdf) |
+| NerVE: Nonlinear Eigenspectrum Dynamics in LLM Feed-Forward Networks | — | 2026 | [2603.06922](https://arxiv.org/pdf/2603.06922) |
+| Spectral Scaling Laws in Language Models: How Effectively Do FFNs Use Their Latent Space? | — | 2025 | [2510.00537](https://arxiv.org/html/2510.00537v1) |
+| The Truth is in There: Improving Reasoning in LLMs with Layer-Selective Rank Reduction (LASER) | Sharma, Ash, Misra | 2023 | [2312.13558](https://arxiv.org/abs/2312.13558) |
+| Dimensional Collapse in Transformer Attention Outputs | — | 2025 | [2508.16929](https://arxiv.org/pdf/2508.16929) |
+| Stabilizing Transformer Training by Preventing Attention Entropy Collapse | Zhai et al. | 2023 | [ICML 2023](https://proceedings.mlr.press/v202/zhai23a/zhai23a.pdf) |
+| LoRA: Low-Rank Adaptation of Large Language Models | Hu et al. | 2021 | [2106.09685](https://arxiv.org/abs/2106.09685) |
+| LoRAP: Transformer Sub-Layers Deserve Differentiated Structured Compression | — | 2024 | [2404.09695](https://arxiv.org/pdf/2404.09695) |
+| Approaching Deep Learning through the Spectral Dynamics of Weights | Yunis et al. | 2024 | [2408.11804](https://arxiv.org/html/2408.11804v1) |
+| From Condensation to Rank Collapse: A Two-Stage Analysis of Transformer Training Dynamics | — | 2024 | [2510.06954](https://arxiv.org/pdf/2510.06954) |
+| Noise-Adaptive Layerwise Learning Rates: Accelerating Geometry-Aware Optimization | — | 2024 | [2510.14009](https://arxiv.org/html/2510.14009v1) |
+| Gaussian Error Linear Units (GELUs) | Hendrycks & Gimpel | 2016 | [1606.08415](https://arxiv.org/pdf/1606.08415) |
 
 ---
 

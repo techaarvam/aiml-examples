@@ -8,6 +8,55 @@ import DataInput
 import common
 from torch.utils.checkpoint import checkpoint as ckpt
 
+class _MLP(nn.Module):
+    """FFN block with optional gradient boost on new dims after an inner_dims expansion.
+
+    When mlp_boost_old_d > 0, hooks multiply the gradient on new-dimension rows/cols
+    by `boost` before the optimizer sees them, accelerating warm-up of the freshly
+    initialised weights without disturbing the old-dim update scale.
+
+    Call remove_boost() after the warm-up epochs to drop the hooks.
+    """
+    def __init__(self, inner_dims, old_d=0, boost=4.0):
+        super().__init__()
+        self.fc1   = nn.Linear(inner_dims, inner_dims * 4)
+        self.act   = nn.GELU()
+        self.fc2   = nn.Linear(inner_dims * 4, inner_dims)
+        self._hooks = []
+        if 0 < old_d < inner_dims:
+            self._register_boost_hooks(old_d, inner_dims, boost)
+
+    def _register_boost_hooks(self, old_d, d, boost):
+        # W_up  shape [4d, d]: rows 0..4*old_d-1 are old hidden units,
+        #                       rows 4*old_d..   are new hidden units.
+        def w_up_hook(grad):
+            g = grad.clone()
+            g[4*old_d:, :]      *= boost   # new hidden units (all input dims)
+            g[:4*old_d, old_d:] *= boost   # old hidden units, new input cols
+            return g
+
+        # W_down shape [d, 4d]: rows 0..old_d-1 are old output dims,
+        #                        rows old_d..    are new output dims.
+        def w_down_hook(grad):
+            g = grad.clone()
+            g[old_d:, :]        *= boost   # new output dims (all hidden cols)
+            g[:old_d, 4*old_d:] *= boost   # old output dims, new hidden input cols
+            return g
+
+        self._hooks = [
+            self.fc1.weight.register_hook(w_up_hook),
+            self.fc2.weight.register_hook(w_down_hook),
+        ]
+
+    def remove_boost(self):
+        for h in self._hooks:
+            h.remove()
+        self._hooks = []
+
+    def forward(self, x):
+        return self.fc2(self.act(self.fc1(x)))
+
+
 class MultiHead (nn.Module):
     def __init__(self):
         super().__init__()
@@ -50,11 +99,10 @@ class MultiHead (nn.Module):
             self.norm2 = nn.ModuleList([nn.LayerNorm(innerDims) for _ in range(args.num_layers)])
 
         # Standard FFN: d -> 4d -> d with GELU
-        self.mlp = nn.ModuleList([nn.Sequential(
-                nn.Linear(innerDims, innerDims * 4),
-                nn.GELU(),
-                nn.Linear(innerDims * 4, innerDims)
-            ) for _ in range(args.num_layers)])
+        self.mlp = nn.ModuleList([
+            _MLP(innerDims, old_d=args.mlp_boost_old_d, boost=args.mlp_boost)
+            for _ in range(args.num_layers)
+        ])
         if (args.output_type == "indices"):
             self.outputLinear = nn.Linear(vecDims, common.vocabSize)
         elif (args.output_type == "vecs"):
@@ -98,8 +146,8 @@ class MultiHead (nn.Module):
                 ill_cond.append(f'Wo.{L}:{cond:.1e}')
 
             # FFN
-            for idx, tag in [(0, f'FFN_up.{L}'), (2, f'FFN_dn.{L}')]:
-                W    = self.mlp[L][idx].weight.detach().cpu().float()
+            for fc, tag in [(self.mlp[L].fc1, f'FFN_up.{L}'), (self.mlp[L].fc2, f'FFN_dn.{L}')]:
+                W    = fc.weight.detach().cpu().float()
                 S    = torch.linalg.svdvals(W)
                 cond = (S[0] / S[-1]).item() if S[-1] > 0 else float('inf')
                 if cond > THRESH:

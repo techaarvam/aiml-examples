@@ -1,4 +1,4 @@
-# CLAUDE.md — Tech Aarvam Transformer Project
+# AGENTS.md — Tech Aarvam Transformer Project
 
 ## Running Notes Guidelines
 
